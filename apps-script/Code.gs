@@ -7,7 +7,8 @@
  *   Attendance : Event ID | Member ID | Marked At
  *     (one row per member who was PRESENT at an event)
  *
- * Anyone with the web app link can VIEW.
+ * This script is a JSON API. The website (folder web/, hosted on Vercel)
+ * calls it with fetch(). Anyone with the website link can VIEW.
  * Only someone who knows the admin password can add / edit / delete
  * members and events and mark attendance.
  *
@@ -25,15 +26,48 @@ var APP_TITLE = 'SSYG Attendance';
 var SESSION_HOURS = 6;
 
 /* ------------------------------------------------------------------ */
-/* Web app entry point                                                 */
+/* JSON API (the website on Vercel calls this)                         */
 /* ------------------------------------------------------------------ */
 
+// Only these functions can be called from the website.
+var API = {
+  getAppData: getAppData,
+  getEventAttendance: getEventAttendance,
+  getAttendanceReport: getAttendanceReport,
+  login: login,
+  logout: logout,
+  checkSession: checkSession,
+  saveMember: saveMember,
+  addMembersBulk: addMembersBulk,
+  removeMember: removeMember,
+  restoreMember: restoreMember,
+  saveEvent: saveEvent,
+  deleteEvent: deleteEvent,
+  saveAttendance: saveAttendance
+};
+
+/**
+ * The website sends POST with body {"action": "...", "args": [...]}
+ * as text/plain (this avoids a CORS preflight, which Apps Script can't answer).
+ */
+function doPost(e) {
+  var out;
+  try {
+    var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    var fn = API.hasOwnProperty(req.action) ? API[req.action] : null;
+    if (!fn) throw new Error('Unknown action: ' + req.action);
+    out = { ok: true, data: fn.apply(null, Array.isArray(req.args) ? req.args : []) };
+  } catch (err) {
+    out = { ok: false, error: (err && err.message) || String(err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** Opening the API URL in a browser just shows that it works. */
 function doGet() {
   setup_();
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle(APP_TITLE)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, app: APP_TITLE, message: 'API is running' }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /* ------------------------------------------------------------------ */

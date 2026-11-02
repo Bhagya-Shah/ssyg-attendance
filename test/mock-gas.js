@@ -40,15 +40,15 @@
   };
   g.Session = { getScriptTimeZone: function () { return 'Asia/Kolkata'; } };
   g.LockService = { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } };
-  // google.script.run shim
-  function runner(ok, fail) {
-    return new Proxy({}, { get: function (_, k) {
-      if (k === 'withSuccessHandler') return function (f) { return runner(f, fail); };
-      if (k === 'withFailureHandler') return function (f) { return runner(ok, f); };
-      return function () { var args = arguments; setTimeout(function () {
-        try { var r = g[k].apply(null, JSON.parse(JSON.stringify(Array.from(args)))); ok && ok(JSON.parse(JSON.stringify(r === undefined ? null : r))); }
-        catch (e) { fail && fail(e); } }, 20); };
-    } });
-  }
-  g.google = { script: { get run() { return runner(null, null); } } };
+  g.ContentService = { MimeType: { JSON: 'json' }, createTextOutput: function (t) { return { text: t, setMimeType: function () { return this; } }; } };
+  // fetch shim: routes the website's API calls into doPost() of Code.gs
+  g.fetch = function (url, opts) {
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        var out = g.doPost({ postData: { contents: opts.body } });
+        resolve({ ok: true, status: 200, json: function () { return Promise.resolve(JSON.parse(out.text)); } });
+      }, 20);
+    });
+  };
+  g.APP_CONFIG_TEST = true;
 })(window);

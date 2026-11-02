@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#c2410c">
+<title>SSYG Attendance</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1 id="appTitle">SSYG Attendance</h1>
+  <span class="badge" id="modeBadge">Viewer</span>
+  <button class="small" id="authBtn">Admin login</button>
+</header>
+<div id="loading" class="hidden"></div>
+<nav>
+  <button data-tab="events" class="on">Events</button>
+  <button data-tab="members">Members</button>
+  <button data-tab="export">Export</button>
+</nav>
+
+<main>
+  <!-- EVENTS LIST -->
+  <section id="tab-events">
+    <div class="toolbar">
+      <input id="eventSearch" placeholder="Search events…">
+      <button class="primary admin-only" id="newEventBtn">+ New event</button>
+    </div>
+    <div id="eventList"></div>
+  </section>
+
+  <!-- EVENT DETAIL -->
+  <section id="tab-event" class="hidden">
+    <button class="back small" id="backBtn">← All events</button>
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <div class="muted" id="evDate"></div>
+          <div class="title" style="font-size:18px" id="evName"></div>
+        </div>
+        <button class="small admin-only" id="editEventBtn">Edit</button>
+        <button class="small danger admin-only" id="deleteEventBtn">Delete</button>
+      </div>
+      <div class="desc muted" id="evDesc"></div>
+    </div>
+    <div class="toolbar">
+      <input id="attSearch" placeholder="Search members…">
+      <button class="small admin-only" id="allBtn">Select all</button>
+      <button class="small admin-only" id="noneBtn">Clear</button>
+    </div>
+    <div class="card" style="padding:0" id="attList"></div>
+    <div class="sticky-save admin-only">
+      <span class="muted" style="flex:1" id="attCount"></span>
+      <button class="primary" id="saveAttBtn">Save attendance</button>
+    </div>
+    <div class="muted viewer-only" id="attCountView"></div>
+  </section>
+
+  <!-- MEMBERS -->
+  <section id="tab-members" class="hidden">
+    <div class="toolbar">
+      <input id="memberSearch" placeholder="Search members…">
+      <button class="primary admin-only" id="newMemberBtn">+ Add member</button>
+      <button class="admin-only" id="bulkBtn">Add many</button>
+    </div>
+    <div class="row muted admin-only" style="margin-bottom:10px">
+      <label style="margin:0;display:flex;gap:6px;align-items:center;color:inherit">
+        <input type="checkbox" id="showRemoved" style="width:auto"> Show removed members
+      </label>
+    </div>
+    <div class="muted" id="memberCount" style="margin-bottom:8px"></div>
+    <div class="card" style="padding:0" id="memberList"></div>
+  </section>
+
+  <!-- EXPORT -->
+  <section id="tab-export" class="hidden">
+    <div class="card">
+      <div class="title">Export attendance</div>
+      <div class="row" style="margin-top:6px">
+        <div class="grow"><label>From</label><input type="date" id="fromDate"></div>
+        <div class="grow"><label>To</label><input type="date" id="toDate"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="small" data-range="month">This month</button>
+        <button class="small" data-range="3m">Last 3 months</button>
+        <button class="small" data-range="year">This year</button>
+        <button class="small" data-range="all">All time</button>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="incRemoved" style="width:auto"> Include removed members
+      </label>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="previewBtn">Show report</button>
+        <button id="csvBtn" disabled>Download CSV (Excel)</button>
+      </div>
+    </div>
+    <div class="muted" id="reportInfo" style="margin:8px 0"></div>
+    <div class="table-wrap hidden" id="reportWrap"><table id="reportTable"></table></div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+<div id="toast" class="hidden"></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

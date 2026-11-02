@@ -1,179 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-<base target="_top">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SSYG Attendance</title>
-<style>
-  :root {
-    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
-    --brand: #c2410c; --brand-soft: #fff1e8; --ok: #15803d; --ok-soft: #e8f6ee; --bad: #b91c1c; --bad-soft: #fdecec;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-         background: var(--bg); color: var(--text); font-size: 15px; }
-  header { background: var(--brand); color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 10px;
-           position: sticky; top: 0; z-index: 5; }
-  header h1 { font-size: 18px; margin: 0; flex: 1; }
-  .badge { font-size: 12px; background: rgba(255,255,255,.2); padding: 3px 8px; border-radius: 99px; }
-  header button { background: #fff; color: var(--brand); border: 0; }
-  nav { display: flex; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 48px; z-index: 4; }
-  nav button { flex: 1; border: 0; background: none; padding: 12px; font-size: 15px; color: var(--muted);
-               border-bottom: 3px solid transparent; border-radius: 0; }
-  nav button.on { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
-  main { max-width: 860px; margin: 0 auto; padding: 16px; }
-  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
-           color: var(--text); cursor: pointer; }
-  button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
-  button.danger { color: var(--bad); border-color: #f3c4c4; }
-  button.small { padding: 4px 10px; font-size: 13px; }
-  button:disabled { opacity: .5; cursor: default; }
-  input, textarea, select { font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px;
-                            width: 100%; background: #fff; color: var(--text); }
-  textarea { min-height: 80px; resize: vertical; }
-  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .row > .grow { flex: 1; min-width: 160px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
-  .list-item { display: flex; gap: 12px; align-items: center; cursor: pointer; }
-  .list-item:hover { border-color: #d0d4db; }
-  .date-box { min-width: 54px; text-align: center; background: var(--brand-soft); color: var(--brand); border-radius: 10px; padding: 6px 4px; }
-  .date-box .d { font-size: 20px; font-weight: 700; line-height: 1; }
-  .date-box .m { font-size: 11px; text-transform: uppercase; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .title { font-weight: 600; }
-  .pill { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--ok-soft); color: var(--ok); white-space: nowrap; }
-  .pill.off { background: var(--bad-soft); color: var(--bad); }
-  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-  .toolbar input { flex: 1; min-width: 160px; }
-  .member { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-  .member:last-child { border-bottom: 0; }
-  .member .name { flex: 1; }
-  .check { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; }
-  .check:last-child { border-bottom: 0; }
-  .check input { width: 20px; height: 20px; accent-color: var(--ok); }
-  .check.on { background: var(--ok-soft); }
-  .check .name { flex: 1; }
-  .sticky-save { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0; display: flex; gap: 8px; align-items: center; }
-  .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
-  .hidden { display: none !important; }
-  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
-  table { border-collapse: collapse; font-size: 13px; width: 100%; }
-  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; white-space: nowrap; }
-  th { background: #fafafa; position: sticky; top: 0; }
-  td.P { color: var(--ok); font-weight: 600; } td.A { color: #c0c4cc; }
-  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
-  .modal { background: #fff; border-radius: 14px; padding: 18px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
-  .modal h2 { margin: 0 0 6px; font-size: 18px; }
-  .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1d2330; color: #fff;
-           padding: 10px 16px; border-radius: 8px; z-index: 30; max-width: 90%; }
-  #toast.err { background: var(--bad); }
-  #loading { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #fff, transparent);
-             animation: slide 1s linear infinite; z-index: 40; }
-  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-  .back { margin-bottom: 12px; }
-  .desc { white-space: pre-wrap; margin-top: 6px; }
-</style>
-</head>
-<body>
-<header>
-  <h1 id="appTitle">SSYG Attendance</h1>
-  <span class="badge" id="modeBadge">Viewer</span>
-  <button class="small" id="authBtn">Admin login</button>
-</header>
-<div id="loading" class="hidden"></div>
-<nav>
-  <button data-tab="events" class="on">Events</button>
-  <button data-tab="members">Members</button>
-  <button data-tab="export">Export</button>
-</nav>
-
-<main>
-  <!-- EVENTS LIST -->
-  <section id="tab-events">
-    <div class="toolbar">
-      <input id="eventSearch" placeholder="Search events…">
-      <button class="primary admin-only" id="newEventBtn">+ New event</button>
-    </div>
-    <div id="eventList"></div>
-  </section>
-
-  <!-- EVENT DETAIL -->
-  <section id="tab-event" class="hidden">
-    <button class="back small" id="backBtn">← All events</button>
-    <div class="card">
-      <div class="row">
-        <div class="grow">
-          <div class="muted" id="evDate"></div>
-          <div class="title" style="font-size:18px" id="evName"></div>
-        </div>
-        <button class="small admin-only" id="editEventBtn">Edit</button>
-        <button class="small danger admin-only" id="deleteEventBtn">Delete</button>
-      </div>
-      <div class="desc muted" id="evDesc"></div>
-    </div>
-    <div class="toolbar">
-      <input id="attSearch" placeholder="Search members…">
-      <button class="small admin-only" id="allBtn">Select all</button>
-      <button class="small admin-only" id="noneBtn">Clear</button>
-    </div>
-    <div class="card" style="padding:0" id="attList"></div>
-    <div class="sticky-save admin-only">
-      <span class="muted" style="flex:1" id="attCount"></span>
-      <button class="primary" id="saveAttBtn">Save attendance</button>
-    </div>
-    <div class="muted viewer-only" id="attCountView"></div>
-  </section>
-
-  <!-- MEMBERS -->
-  <section id="tab-members" class="hidden">
-    <div class="toolbar">
-      <input id="memberSearch" placeholder="Search members…">
-      <button class="primary admin-only" id="newMemberBtn">+ Add member</button>
-      <button class="admin-only" id="bulkBtn">Add many</button>
-    </div>
-    <div class="row muted admin-only" style="margin-bottom:10px">
-      <label style="margin:0;display:flex;gap:6px;align-items:center;color:inherit">
-        <input type="checkbox" id="showRemoved" style="width:auto"> Show removed members
-      </label>
-    </div>
-    <div class="muted" id="memberCount" style="margin-bottom:8px"></div>
-    <div class="card" style="padding:0" id="memberList"></div>
-  </section>
-
-  <!-- EXPORT -->
-  <section id="tab-export" class="hidden">
-    <div class="card">
-      <div class="title">Export attendance</div>
-      <div class="row" style="margin-top:6px">
-        <div class="grow"><label>From</label><input type="date" id="fromDate"></div>
-        <div class="grow"><label>To</label><input type="date" id="toDate"></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="small" data-range="month">This month</button>
-        <button class="small" data-range="3m">Last 3 months</button>
-        <button class="small" data-range="year">This year</button>
-        <button class="small" data-range="all">All time</button>
-      </div>
-      <label style="display:flex;gap:6px;align-items:center">
-        <input type="checkbox" id="incRemoved" style="width:auto"> Include removed members
-      </label>
-      <div class="row" style="margin-top:12px">
-        <button class="primary" id="previewBtn">Show report</button>
-        <button id="csvBtn" disabled>Download CSV (Excel)</button>
-      </div>
-    </div>
-    <div class="muted" id="reportInfo" style="margin:8px 0"></div>
-    <div class="table-wrap hidden" id="reportWrap"><table id="reportTable"></table></div>
-  </section>
-</main>
-
-<div id="modalRoot"></div>
-<div id="toast" class="hidden"></div>
-
-<script>
 (function () {
   var state = {
     token: null, isAdmin: false, members: [], events: [],
@@ -188,23 +12,28 @@
     });
   }
   function store(k, v) {
-    try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); }
+    try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }
     catch (e) { return null; }
   }
   var pending = 0;
+  function apiCall(action, args) {
+    var url = (window.APP_CONFIG || {}).API_URL;
+    if (!url || url.indexOf('PASTE') >= 0) return Promise.reject(new Error('API_URL is not set in config.js'));
+    // text/plain keeps this a "simple" request, so the browser skips the CORS preflight
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: action, args: args }) })
+      .then(function (r) { if (!r.ok) throw new Error('Server error ' + r.status); return r.json(); })
+      .then(function (res) { if (!res.ok) throw new Error(res.error || 'Something went wrong'); return res.data; });
+  }
   function call(fn) {
     var args = Array.prototype.slice.call(arguments, 1);
     pending++; $('loading').classList.remove('hidden');
-    return new Promise(function (resolve, reject) {
-      var done = function () { if (--pending <= 0) { pending = 0; $('loading').classList.add('hidden'); } };
-      google.script.run
-        .withSuccessHandler(function (r) { done(); resolve(r); })
-        .withFailureHandler(function (e) {
-          done();
-          var msg = (e && e.message) || String(e);
-          if (msg.indexOf('SESSION_EXPIRED') >= 0) { setAdmin(null); msg = 'Admin session expired. Please log in again.'; }
-          toast(msg, true); reject(e);
-        })[fn].apply(null, args);
+    var done = function () { if (--pending <= 0) { pending = 0; $('loading').classList.add('hidden'); } };
+    return apiCall(fn, args).then(function (r) { done(); return r; }, function (e) {
+      done();
+      var msg = (e && e.message) || String(e);
+      if (msg === 'Failed to fetch') msg = 'Could not reach the server. Check your internet connection.';
+      if (msg.indexOf('SESSION_EXPIRED') >= 0) { setAdmin(null); msg = 'Admin session expired. Please log in again.'; }
+      toast(msg, true); throw e;
     });
   }
   var toastTimer;
@@ -537,6 +366,8 @@
   };
 
   /* ---------- start ---------- */
+  // Errors are already shown as a toast by call(); don't log them twice.
+  window.addEventListener('unhandledrejection', function (e) { e.preventDefault(); });
   applyRoleVisibility();
   var saved = store('ssyg_token');
   if (saved) {
@@ -544,6 +375,3 @@
   }
   load().then(function () { started = true; }, function () { started = true; });
 })();
-</script>
-</body>
-</html>

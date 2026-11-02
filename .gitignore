@@ -1,5 +1,4 @@
 test/preview.html
 node_modules/
-.clasp.json
-gas/
 test/shots/
+apps-script/.clasp.json

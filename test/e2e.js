@@ -53,6 +53,7 @@ const { chromium } = require('playwright');
   // direct backend call without token must fail
   const r = await p.evaluate(() => { try { saveMember('bad', {name:'x'}); return 'allowed'; } catch(e) { return e.message; } });
   console.log('no-token write:', r);
+  console.log('private fn via API:', await p.evaluate(() => JSON.parse(doPost({postData:{contents:JSON.stringify({action:'setup_',args:[]})}}).text).error));
   console.log('sheets:', JSON.stringify(await p.evaluate(() => Object.fromEntries(Object.entries(__sheets).map(([k,v])=>[k,v.data.length])))));
   console.log('ERRORS:', errs);
   await b.close();
