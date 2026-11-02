@@ -33,6 +33,7 @@ var SESSION_HOURS = 6;
 var API = {
   getAppData: getAppData,
   getEventAttendance: getEventAttendance,
+  getMemberAttendance: getMemberAttendance,
   getAttendanceReport: getAttendanceReport,
   login: login,
   logout: logout,
@@ -90,6 +91,47 @@ function setAdminPassword() {
   if (!NEW_PASSWORD) throw new Error('Type a password into NEW_PASSWORD first.');
   PropertiesService.getScriptProperties().setProperty('ADMIN_PASSWORD', NEW_PASSWORD);
   return 'Admin password saved.';
+}
+
+/**
+ * Suggests a category from the event name (used by the imports and by
+ * autoCategorizeEvents). Returns '' when nothing fits.
+ */
+function categoryFor_(name) {
+  var n = String(name || '').toLowerCase();
+  if (n.indexOf('sandhya bhakti') >= 0 || n.indexOf('sandha bhakti') >= 0) return 'Sandhya Bhakti';
+  if (n.indexOf('anukampa') >= 0) return 'Anukampa Daan';
+  if (n.indexOf('shibir') >= 0) return 'Shibir';
+  if (n.indexOf('paryushan') >= 0) return 'Paryushan';
+  if (n.indexOf('varghoda') >= 0 || n.indexOf('vargoda') >= 0) return 'Varghoda';
+  if (n.indexOf('dhwaja') >= 0) return 'Dhwaja';
+  if (n.indexOf('bhakti') >= 0) return 'Ghar Bhakti';
+  if (/management|setup|sticker|filling|counting|distribution|seva/.test(n)) return 'Seva';
+  return '';
+}
+
+/**
+ * Run once from the editor: fills in a category for every event that
+ * doesn't have one yet, based on its name. Events you already set are kept.
+ */
+function autoCategorizeEvents() {
+  setup_();
+  return withLock_(function () {
+    var sh = sheet_('events'), last = sh.getLastRow(), done = 0;
+    if (last < 2) return 'No events.';
+    var rows = sh.getRange(2, 1, last - 1, 6).getValues();
+    var cats = rows.map(function (r) {
+      var cur = String(r[5] || '').trim();
+      if (cur || !r[0]) return [cur];
+      var c = categoryFor_(r[2]);
+      if (c) done++;
+      return [c];
+    });
+    sh.getRange(2, 6, cats.length, 1).setValues(cats);
+    var msg = 'Categorised ' + done + ' events.';
+    Logger.log(msg);
+    return msg;
+  });
 }
 
 function setup_() {
@@ -167,7 +209,17 @@ function getAppData(token) {
   var counts = {};
   att.forEach(function (a) { counts[a.eventId] = (counts[a.eventId] || 0) + 1; });
   events.forEach(function (e) { e.presentCount = counts[e.id] || 0; });
+  var byMember = {};
+  att.forEach(function (a) { byMember[a.memberId] = (byMember[a.memberId] || 0) + 1; });
+  members.forEach(function (m) { m.attended = byMember[m.id] || 0; });
   return { title: APP_TITLE, members: members, events: events, isAdmin: isAdmin };
+}
+
+/** Event IDs one member was present at. */
+function getMemberAttendance(memberId) {
+  return readAttendance_()
+    .filter(function (a) { return a.memberId === memberId; })
+    .map(function (a) { return a.eventId; });
 }
 
 /** Member IDs present at one event. */

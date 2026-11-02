@@ -34,7 +34,8 @@
     members: [], events: [],
     view: 'events', currentEvent: null,
     present: {}, saved: {}, attFilter: 'all',
-    showRemoved: false, report: null, range: 'all', catFilter: ''
+    showRemoved: false, report: null, range: 'all', catFilter: '',
+    memberSort: store('ssyg_msort') || 'name', eventSort: store('ssyg_esort') || 'new'
   };
 
   /* ================= helpers ================= */
@@ -258,6 +259,7 @@
 
   /* ================= events ================= */
   $('eventSearch').oninput = renderEvents;
+  var EVENT_SORTS = { new: 'Newest', old: 'Oldest', most: 'Most attended' };
   function renderEvents() {
     var total = activeMembers().length;
     var evs = state.events;
@@ -275,7 +277,13 @@
     if (!state.loaded) { $('eventList').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
     state.catFilter = catChips('eventCats', state.catFilter, function (c) { state.catFilter = c; renderEvents(); }) || '';
     var q = $('eventSearch').value.trim().toLowerCase();
-    var list = evs.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; })
+    sortChips('eventSort', EVENT_SORTS, state.eventSort, function (k) { state.eventSort = k; store('ssyg_esort', k); renderEvents(); });
+    var es = state.eventSort;
+    var list = evs.slice().sort(function (a, b) {
+      if (es === 'most') return b.presentCount - a.presentCount || (a.date < b.date ? 1 : -1);
+      if (es === 'old') return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
+    })
       .filter(function (e) { return !state.catFilter || e.category === state.catFilter; })
       .filter(function (e) { return !q || (e.name + ' ' + e.description + ' ' + (e.category || '') + ' ' + fmtDate(e.date)).toLowerCase().indexOf(q) >= 0; });
     if (!list.length) {
@@ -287,7 +295,8 @@
     var html = '', lastMonth = '';
     list.forEach(function (e) {
       var d = parseDate(e.date), mk = isNaN(d) ? '' : MONTHS_FULL[d.getMonth()] + ' ' + d.getFullYear();
-      if (mk !== lastMonth) { html += '<div class="month-title">' + esc(mk) + '</div>'; lastMonth = mk; }
+      if (es === 'most' && !html) html += '<div class="month-title">Most attended first</div>';
+      if (es !== 'most' && mk !== lastMonth) { html += '<div class="month-title">' + esc(mk) + '</div>'; lastMonth = mk; }
       var pct = total ? Math.min(100, Math.round(e.presentCount / total * 100)) : 0;
       var rel = relDay(e.date);
       html += '<button class="ev-card" data-id="' + esc(e.id) + '">' +
@@ -477,13 +486,31 @@
   /* ================= members ================= */
   $('memberSearch').oninput = renderMembers;
   $('showRemovedBtn').onclick = function () { state.showRemoved = !state.showRemoved; renderMembers(); };
+  function memberPct(m) { var n = state.events.length; return n ? Math.round((m.attended || 0) / n * 100) : 0; }
   function memberRow(m) {
+    var pct = memberPct(m);
     var sub = state.isAdmin ? [m.phone, m.email].filter(String).join(' · ') : '';
     var tag = m.active ? '' : '<span class="tag off">Removed</span>';
-    var tagName = state.isAdmin ? 'button' : 'div';
-    return '<' + tagName + ' class="item" data-id="' + esc(m.id) + '">' + avatar(m.name) +
-      '<div class="item-body"><div class="item-name">' + esc(m.name) + '</div>' + (sub ? '<div class="item-sub">' + esc(sub) + '</div>' : '') + '</div>' +
-      tag + (state.isAdmin ? '<span class="chev">' + icon('chev', 18) + '</span>' : '') + '</' + tagName + '>';
+    return '<button class="item" data-id="' + esc(m.id) + '">' + avatar(m.name) +
+      '<div class="item-body"><div class="item-name">' + esc(m.name) + '</div>' +
+      '<div class="item-sub">' + (sub ? esc(sub) + ' · ' : '') + pct + '% attendance</div>' +
+      '<div class="bar mini-bar"><span style="width:' + pct + '%"></span></div></div>' + tag +
+      '<div class="count-pill"><b>' + (m.attended || 0) + '</b><span>events</span></div></button>';
+  }
+  var MEMBER_SORTS = { name: 'A–Z', most: 'Most attended', least: 'Least attended' };
+  function sortMembers(list) {
+    var by = state.memberSort;
+    return list.slice().sort(function (a, b) {
+      if (by === 'most') return (b.attended || 0) - (a.attended || 0) || byName(a, b);
+      if (by === 'least') return (a.attended || 0) - (b.attended || 0) || byName(a, b);
+      return byName(a, b);
+    });
+  }
+  function sortChips(boxId, opts, current, onPick) {
+    $(boxId).innerHTML = Object.keys(opts).map(function (k) {
+      return '<button data-s="' + k + '"' + (k === current ? ' class="on"' : '') + '>' + esc(opts[k]) + '</button>';
+    }).join('');
+    $(boxId).querySelectorAll('button').forEach(function (b) { b.onclick = function () { onPick(b.getAttribute('data-s')); }; });
   }
   function renderMembers() {
     if (!state.loaded) { $('memberList').innerHTML = '<div class="skel" style="margin:0"></div>'; return; }
@@ -492,7 +519,8 @@
     var active = activeMembers();
     var removed = state.members.filter(function (m) { return !m.active; }).sort(byName);
     $('memberCount').textContent = active.length + ' member' + (active.length === 1 ? '' : 's');
-    var list = active.filter(match);
+    sortChips('memberSort', MEMBER_SORTS, state.memberSort, function (k) { state.memberSort = k; store('ssyg_msort', k); renderMembers(); });
+    var list = sortMembers(active.filter(match));
     $('memberList').innerHTML = list.length ? list.map(memberRow).join('') : '';
     if (!list.length) {
       $('memberList').innerHTML = '<div>' + (active.length ? emptyBox('search', 'No matches', 'Try a different name.')
@@ -501,14 +529,40 @@
     var showToggle = state.isAdmin && removed.length;
     document.querySelector('.removed-toggle').classList.toggle('hidden', !showToggle);
     $('showRemovedBtn').textContent = (state.showRemoved ? 'Hide' : 'Show') + ' removed members (' + removed.length + ')';
-    var rl = removed.filter(match);
+    var rl = sortMembers(removed.filter(match));
     $('removedList').classList.toggle('hidden', !(showToggle && state.showRemoved && rl.length));
     $('removedList').innerHTML = rl.map(memberRow).join('');
-    if (state.isAdmin) {
-      document.querySelectorAll('#memberList button.item, #removedList button.item').forEach(function (b) {
-        b.onclick = function () { var m = findMember(b.getAttribute('data-id')); if (m) memberForm(m); };
+    document.querySelectorAll('#memberList button.item, #removedList button.item').forEach(function (b) {
+      b.onclick = function () { var m = findMember(b.getAttribute('data-id')); if (m) memberDetail(m); };
+    });
+  }
+  function memberDetail(m) {
+    var n = state.events.length, pct = memberPct(m);
+    sheet('<div class="md-head">' + avatar(m.name) + '<div><h2>' + esc(m.name) + '</h2><p class="sub" style="margin:0">' +
+      (m.active ? 'Member' : 'Removed member') + (state.isAdmin && m.phone ? ' · ' + esc(m.phone) : '') + '</p></div></div>' +
+      '<div class="stats" style="margin:16px 0 12px"><div class="stat"><div class="v">' + (m.attended || 0) + '</div><div class="l">Attended</div></div>' +
+      '<div class="stat"><div class="v">' + n + '</div><div class="l">Total events</div></div>' +
+      '<div class="stat accent"><div class="v">' + pct + '%</div><div class="l">Attendance</div></div></div>' +
+      '<div class="section-title" style="margin:6px 2px 8px">Events attended</div>' +
+      '<div class="list md-list" id="mdList"><div class="skel" style="margin:0;border-radius:0;height:64px"></div></div>' +
+      '<div class="sheet-actions" style="margin-top:14px"><button class="btn" data-close>Close</button>' +
+      (state.isAdmin ? '<button class="btn primary" id="mdEdit">' + icon('edit', 18) + 'Edit</button>' : '') + '</div>',
+      function () {
+        if ($('mdEdit')) $('mdEdit').onclick = function () { memberForm(m); };
+        call('getMemberAttendance', m.id).then(function (ids) {
+          var box = $('mdList'); if (!box) return;
+          var evs = ids.map(findEvent).filter(Boolean).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+          if (!evs.length) { box.innerHTML = '<div>' + emptyBox('calendar', 'No events yet', 'No attendance recorded for ' + m.name + '.') + '</div>'; return; }
+          box.innerHTML = evs.map(function (e) {
+            var d = parseDate(e.date);
+            return '<button class="item md-ev" data-id="' + esc(e.id) + '"><div class="dtile sm"><div class="d">' + d.getDate() + '</div><div class="w">' + MONTHS[d.getMonth()] + '</div></div>' +
+              '<div class="item-body"><div class="item-name">' + esc(e.name) + '</div><div class="item-sub">' + esc(fmtDate(e.date)) + (e.category ? ' · ' + esc(e.category) : '') + '</div></div></button>';
+          }).join('');
+          box.querySelectorAll('.md-ev').forEach(function (b) {
+            b.onclick = function () { closeSheet(); openEvent(b.getAttribute('data-id')); };
+          });
+        }, function () { var box = $('mdList'); if (box) box.innerHTML = ''; });
       });
-    }
   }
   function memberForm(m) {
     var isNew = !m;

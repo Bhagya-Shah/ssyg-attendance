@@ -367,3 +367,18 @@ td.P { color: var(--ok); font-weight: 800; } td.A { color: var(--muted); opacity
 .cat-pick { margin: -4px -18px 14px; padding: 0 18px; }
 .cat-pick button { height: 32px; font-size: 13px; }
 .field-label { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px 2px; }
+
+/* ---------- sorting / member detail ---------- */
+.sort-row { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; }
+.sort-row > span { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; flex: none; }
+.chips.sort { margin: 0 -16px 0 0; padding: 0 16px 0 0; flex: 1; min-width: 0; }
+.chips.sort button { height: 32px; font-size: 13px; padding: 0 12px; }
+.count-pill { flex: none; min-width: 52px; text-align: center; background: var(--brand-soft); color: var(--brand-ink); border-radius: 12px; padding: 5px 8px; line-height: 1.1; }
+.count-pill b { display: block; font-size: 18px; font-weight: 800; }
+.count-pill span { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.md-head { display: flex; align-items: center; gap: 12px; }
+.md-head .avatar { width: 52px; height: 52px; font-size: 18px; }
+.md-list { max-height: 44vh; overflow-y: auto; box-shadow: none; border: 1px solid var(--line); }
+.dtile.sm { width: 44px; height: 46px; border-radius: 12px; }
+.dtile.sm .d { font-size: 18px; }
+.dtile.sm .w { font-size: 10px; }

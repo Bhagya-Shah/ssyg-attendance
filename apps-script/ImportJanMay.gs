@@ -49,13 +49,13 @@ function importJanToMay() {
     OLD_DATA_JAN_MAY.events.forEach(function (ev) {
       if (existing[ev.date + '|' + ev.name]) return;
       var id = newId_('E');
-      newEvents.push([id, ev.date, ev.name, IMPORT_NOTE, today_()]);
+      newEvents.push([id, ev.date, ev.name, IMPORT_NOTE, today_(), categoryFor_(ev.name)]);
       ev.present.forEach(function (name) {
         newAtt.push([id, idByName[name.toLowerCase()], now]);
       });
     });
     var esh = sheet_('events');
-    if (newEvents.length) esh.getRange(esh.getLastRow() + 1, 1, newEvents.length, 5).setValues(newEvents);
+    if (newEvents.length) esh.getRange(esh.getLastRow() + 1, 1, newEvents.length, 6).setValues(newEvents);
     var ash = sheet_('attendance');
     if (newAtt.length) ash.getRange(ash.getLastRow() + 1, 1, newAtt.length, 3).setValues(newAtt);
 

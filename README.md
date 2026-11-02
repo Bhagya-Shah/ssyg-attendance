@@ -6,6 +6,8 @@ A free attendance app. The website is hosted free on **Vercel**, your **Google S
 
 - **Members**: add one at a time or paste a whole list, edit, remove (kept in history, can be restored) or delete forever.
 - **Events**: any date, with a name, an optional **category** (type a new one or tap an existing one) and an optional description. Filter the event list and reports by category.
+- **Member stats**: every member shows how many events they attended and their %, sortable by A–Z / most / least attended. Tap a member to see every event they attended.
+- **Auto categories**: run `autoCategorizeEvents` once in Apps Script to tag events by name (Sandhya Bhakti, Anukampa Daan, Shibir, Paryushan, Varghoda, Dhwaja, Ghar Bhakti, Seva). Events you already tagged are kept.
 - **Mark attendance**: open an event, tap each person who was present (search, filter Present/Absent, mark all, undo), then Save.
 - **Reports**: choose a date range (This month / Last month / 3 months / This year / All time or custom), see each member's % on screen, then **Download**:
   - **PDF report** with the SSYG logo: summary, **Top 5 attendees**, every member's total and attendance %, and the list of events with how many attended.
