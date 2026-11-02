@@ -77,7 +77,9 @@ Google Sheet: Members | Events | Attendance tabs
 ## Importing the old attendance (one time)
 
 `apps-script/ImportOldData.gs` holds the history from the old app (4 Jul to 1 Nov 2026: 42 members, 45 meetings, 283 marks).
-In Apps Script: **+ > Script**, name it `ImportOldData`, paste the file, save, pick `importOldData` in the dropdown and click **Run**. Running it again replaces the events it imported earlier, so nothing is duplicated. You can delete the file afterwards.
+In Apps Script: **+ > Script**, name it `ImportOldData`, paste the file, save, pick `importOldData` in the dropdown and click **Run**. Running it again replaces the events it imported earlier, so nothing is duplicated.
+
+`apps-script/ImportJanMay.gs` does the same for 1 Jan to 31 May 2026 (35 events, 230 marks): add it as a script named `ImportJanMay` and run `importJanToMay`. You can delete the file afterwards.
 
 ## Updating the app later
 
