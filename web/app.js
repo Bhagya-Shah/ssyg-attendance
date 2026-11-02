@@ -703,10 +703,12 @@
     fab.innerHTML = icon('download', 22) + '<span>Download</span>';
     fab.onclick = function () {
       sheet('<h2>Download report</h2><p class="sub">' + esc(rangeLabel(state.report)) + '</p>' +
-        '<button class="menu-item" id="dPdf">' + icon('file') + '<span style="flex:1">PDF report<div class="item-sub" style="font-weight:500">Top 5, every member\'s total and %, events list</div></span></button>' +
+        '<button class="menu-item" id="dPdf">' + icon('file') + '<span style="flex:1">PDF report<div class="item-sub" style="font-weight:500">Top 5, every member\'s total and %, events list, member-wise events</div></span></button>' +
+        '<label class="switch-row" style="padding:10px 4px 4px"><span>Include member-wise events in PDF<div class="item-sub" style="font-weight:500">Each member’s attended events, month by month (adds pages)</div></span><input type="checkbox" id="dMemberEv" class="switch"' + (store('ssyg_pdf_mev') === '0' ? '' : ' checked') + '></label>' +
         '<button class="menu-item" id="dCsv">' + icon('table') + '<span style="flex:1">Excel / CSV<div class="item-sub" style="font-weight:500">Full P/A grid for every event</div></span></button>',
         function () {
-          $('dPdf').onclick = function () { closeSheet(); downloadPdf(); };
+          $('dMemberEv').onchange = function () { store('ssyg_pdf_mev', $('dMemberEv').checked ? '1' : '0'); };
+          $('dPdf').onclick = function () { var mev = $('dMemberEv').checked; closeSheet(); downloadPdf({ memberEvents: mev }); };
           $('dCsv').onclick = function () { closeSheet(); downloadCsv(); };
         });
     };
@@ -766,14 +768,16 @@
     var n = events.length;
     var members = body.map(function (r) {
       var p = +r[iPresent] || 0;
-      return { name: String(r[0]), present: p, pct: n ? Math.round(p / n * 100) : 0 };
+      var attended = events.filter(function (e, i) { return r[firstEv + i] === 'P'; });
+      return { name: String(r[0]), present: p, pct: n ? Math.round(p / n * 100) : 0, attended: attended };
     }).sort(function (a, b) { return b.present - a.present || a.name.localeCompare(b.name); });
     // Standard competition ranking: ties share a rank (1, 2, 2, 4)
     members.forEach(function (m, i) { m.rank = i && m.present === members[i - 1].present ? members[i - 1].rank : i + 1; });
     var avg = n && members.length ? Math.round(members.reduce(function (s, m) { return s + m.present; }, 0) / (n * members.length) * 100) : 0;
     return { events: events, members: members, avg: avg };
   }
-  function downloadPdf() {
+  function downloadPdf(opts) {
+    opts = opts || {};
     var r = state.report; if (!r) return;
     toast('Preparing PDF…');
     Promise.all([loadPdfLibs(), logoDataUrl()]).then(function (res) {
@@ -859,6 +863,65 @@
         }
       });
       y = doc.lastAutoTable.finalY + 26;
+
+      // Member-wise: which events each member attended, grouped by month
+      if (opts.memberEvents !== false && sum.events.length) {
+      doc.addPage(); y = 50;
+      doc.setTextColor.apply(doc, NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+      doc.text('Member-wise attendance', M, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, MUTED);
+      doc.text('Events each member attended, grouped by month. Sorted by most attended.', M, y + 14);
+      var MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      var monthsSpan = {};
+      sum.events.forEach(function (e) { monthsSpan[e.date.slice(0, 4)] = 1; });
+      var multiYear = Object.keys(monthsSpan).length > 1;
+      var memberRows = [];
+      sum.members.forEach(function (m) {
+        var groups = [], cur = null;
+        m.attended.forEach(function (e) {
+          var key = e.date.slice(0, 7);
+          if (!cur || cur.key !== key) { cur = { key: key, items: [] }; groups.push(cur); }
+          cur.items.push(parseInt(e.date.slice(8), 10) + ' ' + e.name);
+        });
+        var head = { content: '', member: m, rowSpan: Math.max(1, groups.length) };
+        if (!groups.length) {
+          memberRows.push([head, { content: '', none: true }, { content: 'No events attended in this period.', none: true }]);
+          return;
+        }
+        groups.forEach(function (g, i) {
+          var label = MON[+g.key.slice(5) - 1] + (multiYear ? " '" + g.key.slice(2, 4) : '');
+          var row = [{ content: label, month: true }, { content: g.items.join('   •   ') }];
+          if (i === 0) row.unshift(head);
+          memberRows.push(row);
+        });
+      });
+      doc.autoTable({
+        startY: y + 24, margin: { left: M, right: M, top: 50 },
+        head: [['Member', 'Month', 'Events attended (date + event)']],
+        body: memberRows,
+        theme: 'grid', rowPageBreak: 'avoid',
+        headStyles: { fillColor: NAVY, textColor: 255, fontSize: 10, lineColor: NAVY },
+        styles: { lineColor: [227, 231, 241], lineWidth: 0.6 },
+        bodyStyles: { fontSize: 8.6, cellPadding: { top: 5, bottom: 5, left: 7, right: 7 }, textColor: [40, 46, 70], valign: 'top' },
+        columnStyles: { 0: { cellWidth: 122, minCellHeight: 40 }, 1: { cellWidth: 40, halign: 'center' } },
+        didParseCell: function (d) {
+          if (d.section !== 'body' || !d.cell.raw) return;
+          if (d.cell.raw.month) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = BLUE; d.cell.styles.fillColor = [247, 248, 252]; }
+          if (d.cell.raw.none) { d.cell.styles.textColor = MUTED; d.cell.styles.fontStyle = 'italic'; }
+        },
+        didDrawCell: function (d) {
+          if (d.section !== 'body' || d.column.index !== 0 || !d.cell.raw || !d.cell.raw.member) return;
+          var m = d.cell.raw.member, x = d.cell.x + 8, yy = d.cell.y + 15;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 26, 51);
+          doc.text(doc.splitTextToSize(m.name, d.cell.width - 16)[0], x, yy);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor.apply(doc, pctColor(m.pct));
+          doc.text(m.present + ' of ' + sum.events.length + '  ·  ' + m.pct + '%', x, yy + 13);
+          doc.setFillColor(227, 231, 241); doc.roundedRect(x, yy + 19, d.cell.width - 16, 3, 1.5, 1.5, 'F');
+          if (m.pct) { doc.setFillColor.apply(doc, pctColor(m.pct)); doc.roundedRect(x, yy + 19, (d.cell.width - 16) * m.pct / 100, 3, 1.5, 1.5, 'F'); }
+        }
+      });
+      y = doc.lastAutoTable.finalY + 26;
+      }
 
       // Events in the period
       if (sum.events.length) {

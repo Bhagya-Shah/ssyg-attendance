@@ -102,6 +102,7 @@ const fs = require('fs');
   await wait(); await p.click('#fab'); await wait();
   const [pdf] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('#dPdf')]);
   fs.copyFileSync(await pdf.path(), 'test/shots/report.pdf');
+  check('pdf has member-wise section', require('child_process').execSync('pdftotext test/shots/report.pdf -').toString().includes('Member-wise attendance'));
   check('pdf downloaded', pdf.suggestedFilename().endsWith('.pdf') && fs.readFileSync('test/shots/report.pdf').slice(0, 4).toString() === '%PDF');
   await p.click('#tableBtn'); await wait(); await shot('09-table');
   // viewer

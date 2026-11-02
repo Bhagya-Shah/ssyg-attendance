@@ -55,3 +55,4 @@
   };
   g.APP_CONFIG_TEST = true;
 })(window);
+window.Logger = { log: function () {} };
