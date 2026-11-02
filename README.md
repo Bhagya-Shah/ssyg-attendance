@@ -6,12 +6,13 @@ A free attendance app. The website is hosted free on **Vercel**, your **Google S
 
 - **Members**: add one at a time or paste a whole list, edit, remove (kept in history, can be restored) or delete forever.
 - **Events**: any date, with a name and an optional description.
-- **Mark attendance**: open an event, tick who was present (search, Select all, Clear), Save.
+- **Mark attendance**: open an event, tap each person who was present (search, filter Present/Absent, mark all, undo), then Save.
 - **Export**: choose a date range (or This month / Last 3 months / This year / All time), preview the report, and download a CSV that opens in Excel or Google Sheets. It shows P/A per event, each member's total and attendance %, and the total present per event.
 - **Two kinds of access**
   - **Open (viewer)**: anyone with the link can see events, who attended, member names and export reports. No phone numbers or emails are shown.
   - **Admin**: click **Admin login** and enter the admin password to add/edit/delete members and events and mark attendance. A login lasts 6 hours.
-- Works on phones and laptops.
+- **Built for phones first**: bottom tabs, big tap-to-mark rows, a sticky Save bar, bottom-sheet forms, and dark mode. It also works on laptops.
+- **Install it like an app**: open the site on your phone, then use *Share > Add to Home Screen* (iPhone) or *⋮ > Add to Home screen / Install app* (Android). It opens full-screen with its own icon.
 
 ## How it's built
 
@@ -32,6 +33,7 @@ Google Sheet: Members | Events | Attendance tabs
 |---|---|
 | `apps-script/Code.gs` | Backend API: reads and writes the Google Sheet, checks the admin password |
 | `web/index.html`, `web/app.js`, `web/styles.css` | The website |
+| `web/manifest.json`, `web/icon*` | Home-screen app name and icons |
 | `web/config.js` | **The one file you edit**: your Apps Script API URL |
 | `test/` | Local test harness with a fake sheet (not deployed) |
 

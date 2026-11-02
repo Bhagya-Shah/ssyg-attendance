@@ -2,107 +2,125 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#c2410c">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#c2410c" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1412" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SSYG">
+<meta name="description" content="SSYG attendance: events, members and reports">
 <title>SSYG Attendance</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
-  <h1 id="appTitle">SSYG Attendance</h1>
-  <span class="badge" id="modeBadge">Viewer</span>
-  <button class="small" id="authBtn">Admin login</button>
-</header>
-<div id="loading" class="hidden"></div>
-<nav>
-  <button data-tab="events" class="on">Events</button>
-  <button data-tab="members">Members</button>
-  <button data-tab="export">Export</button>
-</nav>
+<div id="loading" class="loading hidden"></div>
 
-<main>
-  <!-- EVENTS LIST -->
-  <section id="tab-events">
-    <div class="toolbar">
-      <input id="eventSearch" placeholder="Search events…">
-      <button class="primary admin-only" id="newEventBtn">+ New event</button>
-    </div>
+<header class="appbar">
+  <button class="icon-btn hidden" id="backBtn" aria-label="Back"></button>
+  <div class="appbar-title">
+    <div class="brand" id="appTitle">SSYG Attendance</div>
+    <div class="appbar-sub" id="appSub">Viewing</div>
+  </div>
+  <button class="role-btn" id="authBtn"></button>
+</header>
+
+<main id="main">
+  <!-- EVENTS -->
+  <section class="view" id="view-events">
+    <div class="stats" id="stats"></div>
+    <div class="search"><span class="search-ico"></span><input id="eventSearch" type="search" placeholder="Search events" autocomplete="off"></div>
     <div id="eventList"></div>
   </section>
 
   <!-- EVENT DETAIL -->
-  <section id="tab-event" class="hidden">
-    <button class="back small" id="backBtn">← All events</button>
-    <div class="card">
-      <div class="row">
-        <div class="grow">
-          <div class="muted" id="evDate"></div>
-          <div class="title" style="font-size:18px" id="evName"></div>
-        </div>
-        <button class="small admin-only" id="editEventBtn">Edit</button>
-        <button class="small danger admin-only" id="deleteEventBtn">Delete</button>
+  <section class="view hidden" id="view-event">
+    <div class="hero">
+      <div class="hero-top">
+        <div class="hero-date" id="evDate"></div>
+        <button class="chip-btn admin-only" id="editEventBtn">Edit</button>
       </div>
-      <div class="desc muted" id="evDesc"></div>
+      <h1 class="hero-name" id="evName"></h1>
+      <p class="hero-desc" id="evDesc"></p>
+      <div class="hero-count">
+        <div><span class="big" id="evPresent">0</span><span class="of" id="evOf"></span></div>
+        <div class="bar"><span id="evBar"></span></div>
+      </div>
     </div>
-    <div class="toolbar">
-      <input id="attSearch" placeholder="Search members…">
-      <button class="small admin-only" id="allBtn">Select all</button>
-      <button class="small admin-only" id="noneBtn">Clear</button>
+    <div class="search"><span class="search-ico"></span><input id="attSearch" type="search" placeholder="Search members" autocomplete="off"></div>
+    <div class="seg admin-only" id="attFilter">
+      <button data-f="all" class="on">All</button>
+      <button data-f="present">Present</button>
+      <button data-f="absent">Absent</button>
     </div>
-    <div class="card" style="padding:0" id="attList"></div>
-    <div class="sticky-save admin-only">
-      <span class="muted" style="flex:1" id="attCount"></span>
-      <button class="primary" id="saveAttBtn">Save attendance</button>
-    </div>
-    <div class="muted viewer-only" id="attCountView"></div>
+    <div class="list" id="attList"></div>
+    <div class="spacer-actions admin-only"></div>
   </section>
 
   <!-- MEMBERS -->
-  <section id="tab-members" class="hidden">
-    <div class="toolbar">
-      <input id="memberSearch" placeholder="Search members…">
-      <button class="primary admin-only" id="newMemberBtn">+ Add member</button>
-      <button class="admin-only" id="bulkBtn">Add many</button>
+  <section class="view hidden" id="view-members">
+    <div class="row-between">
+      <div class="section-title" id="memberCount">Members</div>
+      <button class="chip-btn admin-only" id="bulkBtn">Paste list</button>
     </div>
-    <div class="row muted admin-only" style="margin-bottom:10px">
-      <label style="margin:0;display:flex;gap:6px;align-items:center;color:inherit">
-        <input type="checkbox" id="showRemoved" style="width:auto"> Show removed members
-      </label>
+    <div class="search"><span class="search-ico"></span><input id="memberSearch" type="search" placeholder="Search members" autocomplete="off"></div>
+    <div class="list" id="memberList"></div>
+    <div class="admin-only removed-toggle">
+      <button class="link-btn" id="showRemovedBtn"></button>
     </div>
-    <div class="muted" id="memberCount" style="margin-bottom:8px"></div>
-    <div class="card" style="padding:0" id="memberList"></div>
+    <div class="list hidden" id="removedList"></div>
   </section>
 
-  <!-- EXPORT -->
-  <section id="tab-export" class="hidden">
+  <!-- REPORTS -->
+  <section class="view hidden" id="view-reports">
     <div class="card">
-      <div class="title">Export attendance</div>
-      <div class="row" style="margin-top:6px">
-        <div class="grow"><label>From</label><input type="date" id="fromDate"></div>
-        <div class="grow"><label>To</label><input type="date" id="toDate"></div>
+      <div class="card-title">Attendance report</div>
+      <div class="chips" id="rangeChips">
+        <button data-range="month">This month</button>
+        <button data-range="last">Last month</button>
+        <button data-range="3m">3 months</button>
+        <button data-range="year">This year</button>
+        <button data-range="all" class="on">All time</button>
       </div>
-      <div class="row" style="margin-top:10px">
-        <button class="small" data-range="month">This month</button>
-        <button class="small" data-range="3m">Last 3 months</button>
-        <button class="small" data-range="year">This year</button>
-        <button class="small" data-range="all">All time</button>
+      <div class="two">
+        <label class="field"><span>From</span><input type="date" id="fromDate"></label>
+        <label class="field"><span>To</span><input type="date" id="toDate"></label>
       </div>
-      <label style="display:flex;gap:6px;align-items:center">
-        <input type="checkbox" id="incRemoved" style="width:auto"> Include removed members
-      </label>
-      <div class="row" style="margin-top:12px">
-        <button class="primary" id="previewBtn">Show report</button>
-        <button id="csvBtn" disabled>Download CSV (Excel)</button>
-      </div>
+      <label class="switch-row"><span>Include removed members</span><input type="checkbox" id="incRemoved" class="switch"></label>
+      <button class="btn primary block" id="previewBtn">Show report</button>
     </div>
-    <div class="muted" id="reportInfo" style="margin:8px 0"></div>
-    <div class="table-wrap hidden" id="reportWrap"><table id="reportTable"></table></div>
+    <div id="reportOut" class="hidden">
+      <div class="stats" id="reportStats"></div>
+      <div class="row-between">
+        <div class="section-title">By member</div>
+        <button class="chip-btn" id="tableBtn">Full table</button>
+      </div>
+      <div class="list" id="reportList"></div>
+      <div class="table-wrap hidden" id="reportTableWrap"><table id="reportTable"></table></div>
+      <div class="spacer-actions"></div>
+    </div>
   </section>
 </main>
 
-<div id="modalRoot"></div>
-<div id="toast" class="hidden"></div>
+<!-- Bottom action bar (marking attendance / downloading) -->
+<div class="actionbar hidden" id="actionbar"></div>
+
+<button class="fab hidden" id="fab" aria-label="Add"></button>
+
+<nav class="tabbar" id="tabbar">
+  <button data-tab="events" class="on"><span class="ti" data-icon="calendar"></span><span>Events</span></button>
+  <button data-tab="members"><span class="ti" data-icon="users"></span><span>Members</span></button>
+  <button data-tab="reports"><span class="ti" data-icon="chart"></span><span>Reports</span></button>
+</nav>
+
+<div id="sheetRoot"></div>
+<div id="toast" class="toast hidden"></div>
 
 <script src="config.js"></script>
 <script src="app.js"></script>

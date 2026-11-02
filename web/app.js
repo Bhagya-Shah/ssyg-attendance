@@ -1,10 +1,41 @@
 (function () {
+  'use strict';
+
+  /* ================= icons ================= */
+  var ICONS = {
+    calendar: '<path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>',
+    users: '<path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.87M15.5 3.63a3.5 3.5 0 0 1 0 6.74"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    chev: '<path d="M9 5l7 7-7 7"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/>',
+    dots: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+    download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/>',
+    undo: '<path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>',
+    selectAll: '<path d="M4 12.5l4 4L18 6.5M10 18.5l1 1L21 9.5"/>',
+    clear: '<circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6"/>'
+  };
+  function icon(name, size) {
+    var s = size || 22;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + '</svg>';
+  }
+
+  /* ================= state ================= */
   var state = {
-    token: null, isAdmin: false, members: [], events: [],
-    tab: 'events', currentEvent: null, present: {}, dirty: false, report: null
+    token: null, isAdmin: false, loaded: false,
+    members: [], events: [],
+    view: 'events', currentEvent: null,
+    present: {}, saved: {}, attFilter: 'all',
+    showRemoved: false, report: null, range: 'all'
   };
 
-  /* ---------- helpers ---------- */
+  /* ================= helpers ================= */
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -12,9 +43,48 @@
     });
   }
   function store(k, v) {
-    try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }
-    catch (e) { return null; }
+    try {
+      if (v === undefined) return localStorage.getItem(k);
+      if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+    } catch (e) { return null; }
   }
+  function buzz() { try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {} }
+
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function parseDate(s) { var p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function fmtDate(s) {
+    var d = parseDate(s); if (isNaN(d)) return s || '';
+    return DAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  function relDay(s) {
+    var d = parseDate(s); if (isNaN(d)) return '';
+    var t = new Date(); t.setHours(0, 0, 0, 0);
+    var diff = Math.round((d - t) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === -1) return 'Yesterday';
+    if (diff === 1) return 'Tomorrow';
+    return '';
+  }
+
+  var AV_COLORS = ['#ea580c', '#0891b2', '#7c3aed', '#16a34a', '#db2777', '#ca8a04', '#2563eb', '#dc2626', '#0d9488', '#9333ea'];
+  function avatar(name) {
+    var parts = String(name).trim().split(/\s+/);
+    var ini = ((parts[0] || '')[0] || '?') + (parts.length > 1 ? parts[parts.length - 1][0] : '');
+    var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return '<span class="avatar" style="background:' + AV_COLORS[h % AV_COLORS.length] + '">' + esc(ini.toUpperCase()) + '</span>';
+  }
+  function byName(a, b) { return a.name.localeCompare(b.name); }
+  function activeMembers() { return state.members.filter(function (m) { return m.active; }).sort(byName); }
+  function findMember(id) { return state.members.filter(function (m) { return m.id === id; })[0]; }
+  function findEvent(id) { return state.events.filter(function (e) { return e.id === id; })[0]; }
+  function emptyBox(ico, title, text) {
+    return '<div class="empty"><div class="em-ico">' + icon(ico, 26) + '</div><b>' + esc(title) + '</b>' + esc(text || '') + '</div>';
+  }
+
+  /* ================= API ================= */
   var pending = 0;
   function apiCall(action, args) {
     var url = (window.APP_CONFIG || {}).API_URL;
@@ -31,328 +101,515 @@
     return apiCall(fn, args).then(function (r) { done(); return r; }, function (e) {
       done();
       var msg = (e && e.message) || String(e);
-      if (msg === 'Failed to fetch') msg = 'Could not reach the server. Check your internet connection.';
-      if (msg.indexOf('SESSION_EXPIRED') >= 0) { setAdmin(null); msg = 'Admin session expired. Please log in again.'; }
+      if (msg === 'Failed to fetch' || msg.indexOf('NetworkError') >= 0 || msg.indexOf('Load failed') >= 0) msg = 'Could not reach the server. Check your internet.';
+      if (msg.indexOf('SESSION_EXPIRED') >= 0) { setAdmin(null); msg = 'Admin login expired. Please log in again.'; }
       toast(msg, true); throw e;
     });
   }
+
   var toastTimer;
   function toast(msg, isErr) {
-    var t = $('toast'); t.textContent = msg; t.className = isErr ? 'err' : '';
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'hidden'; }, isErr ? 5000 : 2500);
+    var t = $('toast'); t.textContent = msg; t.className = 'toast' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast hidden'; }, isErr ? 4500 : 2200);
   }
-  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  function parseDate(s) { var p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
-  function fmtDate(s) {
-    if (!s) return '';
-    var d = parseDate(s); if (isNaN(d)) return s;
-    return DAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
-  }
-  function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-  function activeMembers() { return state.members.filter(function (m) { return m.active; }).sort(byName); }
-  function byName(a, b) { return a.name.localeCompare(b.name); }
 
-  /* ---------- modal ---------- */
-  function modal(html, onReady) {
-    var root = $('modalRoot');
-    root.innerHTML = '<div class="overlay"><div class="modal">' + html + '</div></div>';
+  /* ================= bottom sheet ================= */
+  function sheet(html, onReady) {
+    var root = $('sheetRoot');
+    root.innerHTML = '<div class="overlay"><div class="sheet" role="dialog" aria-modal="true"><div class="grabber"></div>' + html + '</div></div>';
     var ov = root.firstChild;
-    ov.addEventListener('click', function (e) { if (e.target === ov) closeModal(); });
-    root.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = closeModal; });
-    var first = root.querySelector('input, textarea'); if (first) first.focus();
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeSheet(); });
+    root.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = closeSheet; });
     if (onReady) onReady(root);
   }
-  function closeModal() { $('modalRoot').innerHTML = ''; }
-  function confirmBox(title, text, okLabel) {
+  function closeSheet() { $('sheetRoot').innerHTML = ''; }
+  function confirmSheet(title, text, okLabel, danger) {
     return new Promise(function (resolve) {
-      modal('<h2>' + esc(title) + '</h2><div class="muted">' + esc(text) + '</div>' +
-        '<div class="actions"><button data-close>Cancel</button><button class="primary" id="cOk">' + esc(okLabel || 'OK') + '</button></div>',
-        function () { $('cOk').onclick = function () { closeModal(); resolve(true); }; });
+      sheet('<h2>' + esc(title) + '</h2><p class="sub">' + esc(text) + '</p>' +
+        '<div class="sheet-actions"><button class="btn" data-close>Cancel</button><button class="btn ' + (danger ? 'danger' : 'primary') + '" id="cOk">' + esc(okLabel || 'OK') + '</button></div>',
+        function () { $('cOk').onclick = function () { closeSheet(); resolve(true); }; });
     });
   }
+  function busy(btn, on) {
+    if (!btn) return;
+    btn.disabled = on;
+    if (on) { btn.dataset.label = btn.innerHTML; btn.innerHTML = 'Saving…'; }
+    else if (btn.dataset.label) btn.innerHTML = btn.dataset.label;
+  }
 
-  /* ---------- auth ---------- */
+  /* ================= auth ================= */
   function setAdmin(token) {
     state.token = token; state.isAdmin = !!token;
     store('ssyg_token', token || null);
-    document.body.classList.toggle('is-admin', state.isAdmin);
-    $('modeBadge').textContent = state.isAdmin ? 'Admin' : 'Viewer';
-    $('authBtn').textContent = state.isAdmin ? 'Log out' : 'Admin login';
-    applyRoleVisibility(); render();
-    if (started) load();
-  }
-  var started = false;
-  function applyRoleVisibility() {
+    var sub = $('appSub');
+    sub.className = 'appbar-sub' + (state.isAdmin ? ' admin' : '');
+    sub.innerHTML = '<span class="dot"></span>' + (state.isAdmin ? 'Admin · can edit' : 'Viewing');
+    $('authBtn').innerHTML = state.isAdmin ? icon('logout', 17) + '<span>Log out</span>' : icon('lock', 17) + '<span>Admin</span>';
     document.querySelectorAll('.admin-only').forEach(function (el) { el.classList.toggle('hidden', !state.isAdmin); });
-    document.querySelectorAll('.viewer-only').forEach(function (el) { el.classList.toggle('hidden', state.isAdmin); });
+    render();
   }
   $('authBtn').onclick = function () {
-    if (state.isAdmin) { call('logout', state.token); setAdmin(null); toast('Logged out'); return; }
-    modal('<h2>Admin login</h2><div class="muted">Admins can add members, events and mark attendance.</div>' +
-      '<form id="loginForm"><label>Password</label><input type="password" id="pw" autocomplete="current-password">' +
-      '<div class="actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Log in</button></div></form>',
+    if (state.isAdmin) {
+      confirmSheet('Log out of admin?', 'You will still be able to view everything.', 'Log out').then(function () {
+        call('logout', state.token).catch(function () {}); setAdmin(null); load(); toast('Logged out');
+      });
+      return;
+    }
+    sheet('<h2>Admin login</h2><p class="sub">Admins can add members and events and mark attendance.</p>' +
+      '<form id="loginForm"><label class="field"><span>Password</span><input type="password" id="pw" autocomplete="current-password" required></label>' +
+      '<div class="sheet-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="loginBtn">Log in</button></div></form>',
       function () {
+        setTimeout(function () { $('pw').focus(); }, 250);
         $('loginForm').onsubmit = function (e) {
           e.preventDefault();
-          call('login', $('pw').value).then(function (tok) { closeModal(); setAdmin(tok); toast('Logged in as admin'); });
+          var b = $('loginBtn'); busy(b, true);
+          call('login', $('pw').value).then(function (tok) {
+            closeSheet(); setAdmin(tok); load(); toast('Welcome, admin');
+          }, function () { busy(b, false); $('pw').select(); });
         };
       });
   };
 
-  /* ---------- tabs ---------- */
-  document.querySelectorAll('nav button').forEach(function (b) {
-    b.onclick = function () { if (leaveCheck()) showTab(b.getAttribute('data-tab')); };
+  /* ================= navigation ================= */
+  document.querySelectorAll('#tabbar button').forEach(function (b) {
+    b.onclick = function () { if (leaveCheck()) go(b.getAttribute('data-tab')); };
   });
-  function showTab(tab) {
-    state.tab = tab;
-    document.querySelectorAll('nav button').forEach(function (b) {
-      var t = b.getAttribute('data-tab'); b.classList.toggle('on', t === tab || (tab === 'event' && t === 'events'));
+  $('backBtn').innerHTML = icon('back');
+  $('backBtn').onclick = function () { history.back(); };
+  window.addEventListener('popstate', function () {
+    if (state.view === 'event') {
+      if (!leaveCheck()) { history.pushState({ v: 'event' }, ''); return; }
+      go('events', true);
+    }
+  });
+
+  function go(view, fromPop) {
+    if (view === 'event' && !fromPop) history.pushState({ v: 'event' }, '');
+    if (state.view === 'event' && view !== 'event' && !fromPop && history.state && history.state.v === 'event') {
+      history.replaceState(null, '');
+    }
+    state.view = view;
+    ['events', 'event', 'members', 'reports'].forEach(function (v) { $('view-' + v).classList.toggle('hidden', v !== view); });
+    document.querySelectorAll('#tabbar button').forEach(function (b) {
+      var t = b.getAttribute('data-tab'); b.classList.toggle('on', t === view || (view === 'event' && t === 'events'));
     });
-    ['events', 'event', 'members', 'export'].forEach(function (t) { $('tab-' + t).classList.toggle('hidden', t !== tab); });
-    render(); window.scrollTo(0, 0);
+    var inEvent = view === 'event';
+    $('backBtn').classList.toggle('hidden', !inEvent);
+    $('tabbar').classList.toggle('hidden', inEvent && state.isAdmin);
+    render();
+    window.scrollTo(0, 0);
+  }
+  function isDirty() {
+    if (state.view !== 'event' || !state.isAdmin) return false;
+    var a = Object.keys(state.present), b = Object.keys(state.saved);
+    if (a.length !== b.length) return true;
+    return a.some(function (k) { return !state.saved[k]; });
   }
   function leaveCheck() {
-    if (state.tab === 'event' && state.dirty && state.isAdmin) {
-      if (!window.confirm('You have unsaved attendance. Leave without saving?')) return false;
-    }
-    state.dirty = false; return true;
+    if (isDirty() && !window.confirm('You have unsaved attendance. Leave without saving?')) return false;
+    return true;
   }
+  window.addEventListener('beforeunload', function (e) { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
 
   function render() {
-    if (state.tab === 'events') renderEvents();
-    if (state.tab === 'event') renderEvent();
-    if (state.tab === 'members') renderMembers();
+    if (state.view === 'events') renderEvents();
+    if (state.view === 'event') renderEvent();
+    if (state.view === 'members') renderMembers();
+    if (state.view === 'reports') renderReportsChrome();
+    renderFab();
+    renderActionbar();
   }
 
-  /* ---------- data ---------- */
+  function renderFab() {
+    var fab = $('fab');
+    var show = state.isAdmin && (state.view === 'events' || state.view === 'members');
+    fab.classList.toggle('hidden', !show);
+    if (!show) return;
+    fab.innerHTML = icon('plus', 22) + '<span>' + (state.view === 'events' ? 'New event' : 'Add member') + '</span>';
+    fab.onclick = state.view === 'events' ? function () { eventForm(); } : function () { memberForm(); };
+  }
+
+  /* ================= data ================= */
   function load() {
     return call('getAppData', state.token).then(function (d) {
-      state.members = d.members; state.events = d.events;
+      state.members = d.members; state.events = d.events; state.loaded = true;
       if (d.title) { $('appTitle').textContent = d.title; document.title = d.title; }
       render();
     });
   }
 
-  /* ---------- events ---------- */
+  /* ================= events ================= */
   $('eventSearch').oninput = renderEvents;
   function renderEvents() {
-    var q = $('eventSearch').value.toLowerCase();
-    var list = state.events.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; })
-      .filter(function (e) { return !q || (e.name + ' ' + e.description + ' ' + e.date).toLowerCase().indexOf(q) >= 0; });
     var total = activeMembers().length;
+    var evs = state.events;
+    // stats
+    var now = new Date(), monthKey = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+    var thisMonth = evs.filter(function (e) { return e.date.slice(0, 7) === monthKey; }).length;
+    var recent = evs.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; })
+      .filter(function (e) { return e.date <= iso(now); }).slice(0, 5);
+    var avg = recent.length && total ? Math.round(recent.reduce(function (s, e) { return s + Math.min(e.presentCount, total); }, 0) / (recent.length * total) * 100) : null;
+    $('stats').innerHTML = !state.loaded ? '' :
+      '<div class="stat"><div class="v">' + total + '</div><div class="l">Members</div></div>' +
+      '<div class="stat"><div class="v">' + thisMonth + '</div><div class="l">Events this month</div></div>' +
+      '<div class="stat accent"><div class="v">' + (avg == null ? '–' : avg + '%') + '</div><div class="l">Avg. attendance</div></div>';
+
+    if (!state.loaded) { $('eventList').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
+    var q = $('eventSearch').value.trim().toLowerCase();
+    var list = evs.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; })
+      .filter(function (e) { return !q || (e.name + ' ' + e.description + ' ' + fmtDate(e.date)).toLowerCase().indexOf(q) >= 0; });
     if (!list.length) {
-      $('eventList').innerHTML = '<div class="empty">' + (state.events.length ? 'No events match.' :
-        'No events yet.' + (state.isAdmin ? ' Tap “+ New event” to create one.' : '')) + '</div>';
+      $('eventList').innerHTML = evs.length ? emptyBox('search', 'No matches', 'Try a different search.')
+        : emptyBox('calendar', 'No events yet', state.isAdmin ? 'Tap “New event” to create the first one.' : 'Events will show up here.');
       return;
     }
-    $('eventList').innerHTML = list.map(function (e) {
-      var d = parseDate(e.date);
-      return '<div class="card list-item" data-id="' + esc(e.id) + '">' +
-        '<div class="date-box"><div class="d">' + (isNaN(d) ? '?' : d.getDate()) + '</div><div class="m">' +
-        (isNaN(d) ? '' : MONTHS[d.getMonth()] + ' ' + String(d.getFullYear()).slice(-2)) + '</div></div>' +
-        '<div style="flex:1;min-width:0"><div class="title">' + esc(e.name) + '</div>' +
-        '<div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.description || fmtDate(e.date)) + '</div></div>' +
-        '<span class="pill">' + e.presentCount + ' present</span></div>';
-    }).join('');
-    $('eventList').querySelectorAll('.list-item').forEach(function (el) {
+    var html = '', lastMonth = '';
+    list.forEach(function (e) {
+      var d = parseDate(e.date), mk = isNaN(d) ? '' : MONTHS_FULL[d.getMonth()] + ' ' + d.getFullYear();
+      if (mk !== lastMonth) { html += '<div class="month-title">' + esc(mk) + '</div>'; lastMonth = mk; }
+      var pct = total ? Math.min(100, Math.round(e.presentCount / total * 100)) : 0;
+      var rel = relDay(e.date);
+      html += '<button class="ev-card" data-id="' + esc(e.id) + '">' +
+        '<div class="dtile"><div class="d">' + (isNaN(d) ? '?' : d.getDate()) + '</div><div class="w">' + (isNaN(d) ? '' : DAYS[d.getDay()]) + '</div></div>' +
+        '<div class="ev-body"><div class="ev-name">' + esc(e.name) + '</div>' +
+        '<div class="ev-desc">' + esc(rel ? rel + (e.description ? ' · ' + e.description : '') : (e.description || fmtDate(e.date))) + '</div>' +
+        '<div class="ev-meta"><div class="bar"><span style="width:' + pct + '%"></span></div><span>' + e.presentCount + ' present</span></div></div>' +
+        '<span class="chev">' + icon('chev', 18) + '</span></button>';
+    });
+    $('eventList').innerHTML = html;
+    $('eventList').querySelectorAll('.ev-card').forEach(function (el) {
       el.onclick = function () { openEvent(el.getAttribute('data-id')); };
     });
   }
 
   function eventForm(ev) {
+    var isNew = !ev;
     ev = ev || { date: iso(new Date()), name: '', description: '' };
-    modal('<h2>' + (ev.id ? 'Edit event' : 'New event') + '</h2><form id="evForm">' +
-      '<label>Date</label><input type="date" id="fDate" required value="' + esc(ev.date) + '">' +
-      '<label>Event name</label><input id="fName" required maxlength="120" value="' + esc(ev.name) + '" placeholder="e.g. Weekly sabha">' +
-      '<label>Description (optional)</label><textarea id="fDesc" maxlength="1000">' + esc(ev.description) + '</textarea>' +
-      '<div class="actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Save</button></div></form>',
+    sheet('<h2>' + (isNew ? 'New event' : 'Edit event') + '</h2><p class="sub">' + (isNew ? 'After saving you can mark who was present.' : 'Update the event details.') + '</p>' +
+      '<form id="evForm">' +
+      '<label class="field"><span>Event name</span><input id="fName" required maxlength="120" value="' + esc(ev.name) + '" placeholder="e.g. Weekly sabha" autocomplete="off"></label>' +
+      '<label class="field"><span>Date</span><input type="date" id="fDate" required value="' + esc(ev.date) + '"></label>' +
+      '<label class="field"><span>Description (optional)</span><textarea id="fDesc" maxlength="1000" placeholder="Venue, topic, notes…">' + esc(ev.description) + '</textarea></label>' +
+      '<div class="sheet-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="evSave">' + (isNew ? 'Create' : 'Save') + '</button></div>' +
+      (isNew ? '' : '<button type="button" class="menu-item danger" id="evDel" style="justify-content:center;margin-top:10px">' + icon('trash', 20) + 'Delete event</button>') +
+      '</form>',
       function () {
         $('evForm').onsubmit = function (e) {
           e.preventDefault();
+          var b = $('evSave'); busy(b, true);
           var data = { id: ev.id, date: $('fDate').value, name: $('fName').value, description: $('fDesc').value };
           call('saveEvent', state.token, data).then(function (id) {
-            closeModal(); toast('Event saved');
-            return load().then(function () { if (!ev.id) openEvent(id); });
+            closeSheet(); toast(isNew ? 'Event created' : 'Event updated');
+            return load().then(function () { if (isNew) openEvent(id); });
+          }, function () { busy(b, false); });
+        };
+        if (!isNew) $('evDel').onclick = function () {
+          confirmSheet('Delete “' + ev.name + '”?', 'This deletes the event and its attendance. It cannot be undone.', 'Delete', true).then(function () {
+            call('deleteEvent', state.token, ev.id).then(function () {
+              state.present = {}; state.saved = {}; toast('Event deleted'); history.back(); load();
+            });
           });
         };
       });
   }
-  $('newEventBtn').onclick = function () { eventForm(); };
 
+  /* ================= event detail / marking ================= */
   function openEvent(id) {
-    var ev = state.events.filter(function (e) { return e.id === id; })[0];
-    if (!ev) return;
-    state.currentEvent = ev; state.present = {}; state.dirty = false;
+    var ev = findEvent(id); if (!ev) return;
+    state.currentEvent = ev; state.present = {}; state.saved = {}; state.attFilter = 'all'; state.attLoading = true;
     $('attSearch').value = '';
-    showTab('event');
-    $('attList').innerHTML = '<div class="empty">Loading…</div>';
+    document.querySelectorAll('#attFilter button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-f') === 'all'); });
+    go('event');
     call('getEventAttendance', id).then(function (ids) {
-      state.present = {}; ids.forEach(function (m) { state.present[m] = true; });
-      renderEvent();
-    });
+      state.present = {}; state.saved = {};
+      ids.forEach(function (m) { state.present[m] = true; state.saved[m] = true; });
+      state.attLoading = false; render();
+    }, function () { state.attLoading = false; render(); });
   }
-  $('backBtn').onclick = function () { if (leaveCheck()) showTab('events'); };
   $('editEventBtn').onclick = function () { eventForm(state.currentEvent); };
-  $('deleteEventBtn').onclick = function () {
-    var ev = state.currentEvent;
-    confirmBox('Delete event?', 'This deletes “' + ev.name + '” and its attendance. This cannot be undone.', 'Delete').then(function () {
-      call('deleteEvent', state.token, ev.id).then(function () { state.dirty = false; toast('Event deleted'); showTab('events'); load(); });
-    });
-  };
   $('attSearch').oninput = renderEvent;
-  $('allBtn').onclick = function () { visibleAttMembers().forEach(function (m) { state.present[m.id] = true; }); state.dirty = true; renderEvent(); };
-  $('noneBtn').onclick = function () { visibleAttMembers().forEach(function (m) { delete state.present[m.id]; }); state.dirty = true; renderEvent(); };
+  document.querySelectorAll('#attFilter button').forEach(function (b) {
+    b.onclick = function () {
+      state.attFilter = b.getAttribute('data-f');
+      document.querySelectorAll('#attFilter button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      renderEvent();
+    };
+  });
 
-  function visibleAttMembers() {
-    var q = $('attSearch').value.toLowerCase();
-    // Active members, plus removed members who were present at this event (keeps history visible)
+  function attMembers() {
+    // Active members, plus removed members who were present (keeps history visible)
     var list = state.members.filter(function (m) { return m.active || state.present[m.id]; }).sort(byName);
-    if (!state.isAdmin) list = list.filter(function (m) { return state.present[m.id]; });
-    return list.filter(function (m) { return !q || m.name.toLowerCase().indexOf(q) >= 0; });
+    if (!state.isAdmin) return list.filter(function (m) { return state.present[m.id]; });
+    if (state.attFilter === 'present') list = list.filter(function (m) { return state.present[m.id]; });
+    if (state.attFilter === 'absent') list = list.filter(function (m) { return !state.present[m.id]; });
+    return list;
   }
-  function renderEvent() {
+  function visibleAttMembers() {
+    var q = $('attSearch').value.trim().toLowerCase();
+    return attMembers().filter(function (m) { return !q || m.name.toLowerCase().indexOf(q) >= 0; });
+  }
+  function presentCount() { return Object.keys(state.present).length; }
+
+  function renderEventHero() {
     var ev = state.currentEvent; if (!ev) return;
-    // refresh from latest data (after edit)
-    ev = state.events.filter(function (e) { return e.id === ev.id; })[0] || ev; state.currentEvent = ev;
-    $('evDate').textContent = fmtDate(ev.date);
+    var total = activeMembers().length, n = presentCount();
+    var rel = relDay(ev.date);
+    $('evDate').textContent = (rel ? rel + ' · ' : '') + fmtDate(ev.date);
     $('evName').textContent = ev.name;
     $('evDesc').textContent = ev.description || '';
+    $('evPresent').textContent = n;
+    $('evOf').textContent = 'of ' + total + ' present';
+    $('evBar').style.width = (total ? Math.min(100, n / total * 100) : 0) + '%';
+  }
+  function renderEvent() {
+    if (!state.currentEvent) return;
+    state.currentEvent = findEvent(state.currentEvent.id) || state.currentEvent;
+    renderEventHero();
+    var box = $('attList');
+    if (state.attLoading) { box.innerHTML = '<div class="skel" style="margin:0;border-radius:0"></div>'; return; }
     var list = visibleAttMembers();
-    var count = Object.keys(state.present).length;
-    var total = activeMembers().length;
-    $('attCount').textContent = count + ' of ' + total + ' present' + (state.dirty ? ' · unsaved changes' : '');
-    $('attCountView').textContent = count + ' of ' + total + ' members were present.';
     if (!list.length) {
-      $('attList').innerHTML = '<div class="empty">' + (state.isAdmin ? (state.members.length ? 'No members match.' : 'Add members first in the Members tab.') : 'No attendance marked for this event yet.') + '</div>';
+      box.innerHTML = '';
+      var msg = !state.isAdmin ? emptyBox('users', 'No attendance yet', 'Nobody has been marked present for this event.')
+        : !state.members.length ? emptyBox('users', 'No members yet', 'Add members in the Members tab first.')
+        : emptyBox('search', 'Nobody here', 'No members match this filter.');
+      box.innerHTML = '<div>' + msg + '</div>';
       return;
     }
     if (state.isAdmin) {
-      $('attList').innerHTML = list.map(function (m) {
+      box.innerHTML = list.map(function (m) {
         var on = !!state.present[m.id];
-        return '<label class="check' + (on ? ' on' : '') + '" data-id="' + esc(m.id) + '"><input type="checkbox"' + (on ? ' checked' : '') + '>' +
-          '<span class="name">' + esc(m.name) + (m.active ? '' : ' <span class="pill off">removed</span>') + '</span>' +
-          '<span class="muted">' + (on ? 'Present' : '') + '</span></label>';
+        return '<button class="item mark' + (on ? ' on' : '') + '" data-id="' + esc(m.id) + '" aria-pressed="' + on + '">' + avatar(m.name) +
+          '<div class="item-body"><div class="item-name">' + esc(m.name) + '</div>' +
+          (m.active ? '' : '<div class="item-sub">Removed member</div>') + '</div>' +
+          '<span class="tick">' + icon('check', 18) + '</span></button>';
       }).join('');
-      $('attList').querySelectorAll('.check input').forEach(function (cb) {
-        cb.onchange = function () {
-          var id = cb.parentNode.getAttribute('data-id');
-          if (cb.checked) state.present[id] = true; else delete state.present[id];
-          state.dirty = true; renderEvent();
+      box.querySelectorAll('.mark').forEach(function (row) {
+        row.onclick = function () {
+          var id = row.getAttribute('data-id');
+          if (state.present[id]) delete state.present[id]; else state.present[id] = true;
+          var on = !!state.present[id];
+          row.classList.toggle('on', on); row.setAttribute('aria-pressed', on);
+          buzz();
+          // In Present/Absent filters keep the row until the next re-render so it doesn't jump away under the finger
+          renderEventHero(); renderActionbar();
         };
       });
     } else {
-      $('attList').innerHTML = list.map(function (m) {
-        return '<div class="member"><span class="name">' + esc(m.name) + '</span><span class="pill">Present</span></div>';
+      box.innerHTML = list.map(function (m) {
+        return '<div class="item">' + avatar(m.name) + '<div class="item-body"><div class="item-name">' + esc(m.name) + '</div></div><span class="tag">Present</span></div>';
       }).join('');
     }
   }
-  $('saveAttBtn').onclick = function () {
-    var ev = state.currentEvent; var ids = Object.keys(state.present);
-    $('saveAttBtn').disabled = true;
-    call('saveAttendance', state.token, ev.id, ids).then(function (n) {
-      state.dirty = false; toast('Saved: ' + n + ' present'); renderEvent(); load();
-    }).then(function () { $('saveAttBtn').disabled = false; }, function () { $('saveAttBtn').disabled = false; });
-  };
 
-  /* ---------- members ---------- */
+  function renderActionbar() {
+    var bar = $('actionbar');
+    var show = state.view === 'event' && state.isAdmin;
+    bar.classList.toggle('hidden', !show);
+    $('tabbar').classList.toggle('hidden', show);
+    if (!show) return;
+    var n = presentCount(), total = activeMembers().length, dirty = isDirty();
+    bar.innerHTML = '<div class="actionbar-inner">' +
+      '<button class="btn more" id="moreBtn" aria-label="More options">' + icon('dots') + '</button>' +
+      '<div class="info"><b>' + n + '</b> <span style="color:var(--muted);font-weight:600">/ ' + total + '</span>' +
+      '<div class="' + (dirty ? 'unsaved' : '') + '">' + (dirty ? 'Unsaved changes' : 'All saved') + '</div></div>' +
+      '<button class="btn ' + (dirty ? 'ok' : '') + '" id="saveAttBtn"' + (dirty ? '' : ' disabled') + '>' + icon('check', 20) + 'Save</button></div>';
+    $('saveAttBtn').onclick = saveAttendance;
+    $('moreBtn').onclick = function () {
+      sheet('<h2>Quick actions</h2><p class="sub">Applies to the members shown in the list.</p>' +
+        '<button class="menu-item" id="qAll">' + icon('selectAll') + 'Mark all present</button>' +
+        '<button class="menu-item" id="qNone">' + icon('clear') + 'Clear all</button>' +
+        '<button class="menu-item" id="qUndo"' + (dirty ? '' : ' disabled style="opacity:.4"') + '>' + icon('undo') + 'Undo unsaved changes</button>' +
+        '<button class="menu-item" id="qEdit">' + icon('edit') + 'Edit event details</button>',
+        function () {
+          $('qAll').onclick = function () { visibleAttMembers().forEach(function (m) { state.present[m.id] = true; }); closeSheet(); render(); };
+          $('qNone').onclick = function () { visibleAttMembers().forEach(function (m) { delete state.present[m.id]; }); closeSheet(); render(); };
+          $('qUndo').onclick = function () { if (!isDirty()) return; state.present = Object.assign({}, state.saved); closeSheet(); render(); };
+          $('qEdit').onclick = function () { closeSheet(); eventForm(state.currentEvent); };
+        });
+    };
+  }
+  function saveAttendance() {
+    var ev = state.currentEvent, ids = Object.keys(state.present), b = $('saveAttBtn');
+    busy(b, true);
+    call('saveAttendance', state.token, ev.id, ids).then(function (n) {
+      state.saved = Object.assign({}, state.present);
+      toast('Saved · ' + n + ' present');
+      ev.presentCount = n; render(); load();
+    }, function () { busy(b, false); });
+  }
+
+  /* ================= members ================= */
   $('memberSearch').oninput = renderMembers;
-  $('showRemoved').onchange = renderMembers;
+  $('showRemovedBtn').onclick = function () { state.showRemoved = !state.showRemoved; renderMembers(); };
+  function memberRow(m) {
+    var sub = state.isAdmin ? [m.phone, m.email].filter(String).join(' · ') : '';
+    var tag = m.active ? '' : '<span class="tag off">Removed</span>';
+    var tagName = state.isAdmin ? 'button' : 'div';
+    return '<' + tagName + ' class="item" data-id="' + esc(m.id) + '">' + avatar(m.name) +
+      '<div class="item-body"><div class="item-name">' + esc(m.name) + '</div>' + (sub ? '<div class="item-sub">' + esc(sub) + '</div>' : '') + '</div>' +
+      tag + (state.isAdmin ? '<span class="chev">' + icon('chev', 18) + '</span>' : '') + '</' + tagName + '>';
+  }
   function renderMembers() {
-    var q = $('memberSearch').value.toLowerCase();
-    var showRemoved = state.isAdmin && $('showRemoved').checked;
-    var list = state.members.filter(function (m) { return m.active || showRemoved; }).sort(byName)
-      .filter(function (m) { return !q || (m.name + ' ' + m.phone + ' ' + m.email).toLowerCase().indexOf(q) >= 0; });
-    $('memberCount').textContent = activeMembers().length + ' active members';
+    if (!state.loaded) { $('memberList').innerHTML = '<div class="skel" style="margin:0"></div>'; return; }
+    var q = $('memberSearch').value.trim().toLowerCase();
+    var match = function (m) { return !q || (m.name + ' ' + (m.phone || '') + ' ' + (m.email || '')).toLowerCase().indexOf(q) >= 0; };
+    var active = activeMembers();
+    var removed = state.members.filter(function (m) { return !m.active; }).sort(byName);
+    $('memberCount').textContent = active.length + ' member' + (active.length === 1 ? '' : 's');
+    var list = active.filter(match);
+    $('memberList').innerHTML = list.length ? list.map(memberRow).join('') : '';
     if (!list.length) {
-      $('memberList').innerHTML = '<div class="empty">' + (state.members.length ? 'No members match.' : 'No members yet.' + (state.isAdmin ? ' Add them with “+ Add member” or “Add many”.' : '')) + '</div>';
-      return;
+      $('memberList').innerHTML = '<div>' + (active.length ? emptyBox('search', 'No matches', 'Try a different name.')
+        : emptyBox('users', 'No members yet', state.isAdmin ? 'Tap “Add member”, or “Paste list” to add everyone at once.' : 'Members will show up here.')) + '</div>';
     }
-    $('memberList').innerHTML = list.map(function (m) {
-      var sub = [m.phone, state.isAdmin ? m.email : ''].filter(String).join(' · ');
-      var btns = '';
-      if (state.isAdmin) {
-        btns = m.active
-          ? '<button class="small" data-act="edit">Edit</button><button class="small danger" data-act="remove">Remove</button>'
-          : '<button class="small" data-act="restore">Restore</button><button class="small danger" data-act="purge">Delete forever</button>';
-      }
-      return '<div class="member" data-id="' + esc(m.id) + '"><div class="name"><div>' + esc(m.name) +
-        (m.active ? '' : ' <span class="pill off">removed</span>') + '</div>' +
-        (sub ? '<div class="muted">' + esc(sub) + '</div>' : '') + '</div>' + btns + '</div>';
-    }).join('');
-    $('memberList').querySelectorAll('button[data-act]').forEach(function (b) {
-      b.onclick = function () {
-        var id = b.closest('.member').getAttribute('data-id');
-        var m = state.members.filter(function (x) { return x.id === id; })[0];
-        var act = b.getAttribute('data-act');
-        if (act === 'edit') memberForm(m);
-        if (act === 'remove') confirmBox('Remove ' + m.name + '?', 'They will no longer appear when marking attendance. Their past attendance is kept, and you can restore them later.', 'Remove')
-          .then(function () { call('removeMember', state.token, id, false).then(function () { toast('Member removed'); load(); }); });
-        if (act === 'restore') call('restoreMember', state.token, id).then(function () { toast('Member restored'); load(); });
-        if (act === 'purge') confirmBox('Delete ' + m.name + ' forever?', 'This also deletes all their past attendance. This cannot be undone.', 'Delete forever')
-          .then(function () { call('removeMember', state.token, id, true).then(function () { toast('Member deleted'); load(); }); });
-      };
-    });
+    var showToggle = state.isAdmin && removed.length;
+    document.querySelector('.removed-toggle').classList.toggle('hidden', !showToggle);
+    $('showRemovedBtn').textContent = (state.showRemoved ? 'Hide' : 'Show') + ' removed members (' + removed.length + ')';
+    var rl = removed.filter(match);
+    $('removedList').classList.toggle('hidden', !(showToggle && state.showRemoved && rl.length));
+    $('removedList').innerHTML = rl.map(memberRow).join('');
+    if (state.isAdmin) {
+      document.querySelectorAll('#memberList button.item, #removedList button.item').forEach(function (b) {
+        b.onclick = function () { var m = findMember(b.getAttribute('data-id')); if (m) memberForm(m); };
+      });
+    }
   }
   function memberForm(m) {
-    m = m || { name: '', phone: '', email: '', notes: '' };
-    modal('<h2>' + (m.id ? 'Edit member' : 'Add member') + '</h2><form id="mForm">' +
-      '<label>Name</label><input id="mName" required maxlength="100" value="' + esc(m.name) + '">' +
-      '<label>Phone (optional)</label><input id="mPhone" maxlength="30" value="' + esc(m.phone) + '">' +
-      '<label>Email (optional)</label><input id="mEmail" type="email" maxlength="100" value="' + esc(m.email) + '">' +
-      '<label>Notes (optional)</label><textarea id="mNotes" maxlength="500">' + esc(m.notes) + '</textarea>' +
-      '<div class="actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Save</button></div></form>',
+    var isNew = !m;
+    m = m || { name: '', phone: '', email: '', notes: '', active: true };
+    var extra = '';
+    if (!isNew) {
+      extra = m.active
+        ? '<button type="button" class="menu-item danger" id="mRemove" style="justify-content:center;margin-top:10px">' + icon('trash', 20) + 'Remove member</button>'
+        : '<button type="button" class="menu-item" id="mRestore" style="justify-content:center;margin-top:10px">' + icon('undo', 20) + 'Restore member</button>' +
+          '<button type="button" class="menu-item danger" id="mPurge" style="justify-content:center">' + icon('trash', 20) + 'Delete forever</button>';
+    }
+    sheet('<h2>' + (isNew ? 'Add member' : esc(m.name)) + '</h2><p class="sub">' + (isNew ? 'Only the name is required.' : (m.active ? 'Edit details' : 'This member was removed.')) + '</p>' +
+      '<form id="mForm">' +
+      '<label class="field"><span>Full name</span><input id="mName" required maxlength="100" value="' + esc(m.name) + '" autocomplete="off"></label>' +
+      '<label class="field"><span>Phone (optional)</span><input id="mPhone" type="tel" inputmode="tel" maxlength="30" value="' + esc(m.phone) + '"></label>' +
+      '<label class="field"><span>Email (optional)</span><input id="mEmail" type="email" inputmode="email" maxlength="100" value="' + esc(m.email) + '"></label>' +
+      '<label class="field"><span>Notes (optional)</span><textarea id="mNotes" maxlength="500">' + esc(m.notes) + '</textarea></label>' +
+      '<div class="sheet-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="mSave">' + (isNew ? 'Add' : 'Save') + '</button></div>' +
+      extra + '</form>',
       function () {
+        if (isNew) setTimeout(function () { $('mName').focus(); }, 250);
         $('mForm').onsubmit = function (e) {
           e.preventDefault();
-          call('saveMember', state.token, { id: m.id, name: $('mName').value, phone: $('mPhone').value, email: $('mEmail').value, notes: $('mNotes').value, active: true })
-            .then(function () { closeModal(); toast('Member saved'); load(); });
+          var b = $('mSave'); busy(b, true);
+          call('saveMember', state.token, { id: m.id, name: $('mName').value, phone: $('mPhone').value, email: $('mEmail').value, notes: $('mNotes').value, active: m.active !== false })
+            .then(function () { closeSheet(); toast(isNew ? 'Member added' : 'Saved'); load(); }, function () { busy(b, false); });
+        };
+        if ($('mRemove')) $('mRemove').onclick = function () {
+          confirmSheet('Remove ' + m.name + '?', 'They won’t appear when marking attendance. Past attendance is kept and you can restore them anytime.', 'Remove', true)
+            .then(function () { call('removeMember', state.token, m.id, false).then(function () { toast('Member removed'); load(); }); });
+        };
+        if ($('mRestore')) $('mRestore').onclick = function () {
+          closeSheet(); call('restoreMember', state.token, m.id).then(function () { toast('Member restored'); load(); });
+        };
+        if ($('mPurge')) $('mPurge').onclick = function () {
+          confirmSheet('Delete ' + m.name + ' forever?', 'This also deletes all their past attendance. It cannot be undone.', 'Delete forever', true)
+            .then(function () { call('removeMember', state.token, m.id, true).then(function () { toast('Member deleted'); load(); }); });
         };
       });
   }
-  $('newMemberBtn').onclick = function () { memberForm(); };
   $('bulkBtn').onclick = function () {
-    modal('<h2>Add many members</h2><div class="muted">One member per line. You can add a phone after a comma, e.g. <b>Ravi Patel, 9876543210</b>. Names that already exist are skipped.</div>' +
-      '<form id="bForm"><textarea id="bText" style="min-height:200px;margin-top:10px"></textarea>' +
-      '<div class="actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Add</button></div></form>',
+    sheet('<h2>Paste a list</h2><p class="sub">One member per line. Add a phone after a comma if you like:<br><b>Ravi Patel, 9876543210</b><br>Names that already exist are skipped.</p>' +
+      '<form id="bForm"><label class="field"><textarea id="bText" style="min-height:220px" placeholder="Asha Shah\nRavi Patel, 9876543210\n…"></textarea></label>' +
+      '<div class="sheet-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="bSave">Add all</button></div></form>',
       function () {
         $('bForm').onsubmit = function (e) {
           e.preventDefault();
-          call('addMembersBulk', state.token, $('bText').value).then(function (n) { closeModal(); toast(n + ' member(s) added'); load(); });
+          var b = $('bSave'); busy(b, true);
+          call('addMembersBulk', state.token, $('bText').value).then(function (n) {
+            closeSheet(); toast(n + ' member' + (n === 1 ? '' : 's') + ' added'); load();
+          }, function () { busy(b, false); });
         };
       });
   };
 
-  /* ---------- export ---------- */
-  document.querySelectorAll('[data-range]').forEach(function (b) {
-    b.onclick = function () {
-      var now = new Date(), r = b.getAttribute('data-range'), from = '', to = '';
-      if (r === 'month') { from = iso(new Date(now.getFullYear(), now.getMonth(), 1)); to = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)); }
-      if (r === '3m') { from = iso(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())); to = iso(now); }
-      if (r === 'year') { from = now.getFullYear() + '-01-01'; to = now.getFullYear() + '-12-31'; }
-      $('fromDate').value = from; $('toDate').value = to;
-      runReport();
-    };
+  /* ================= reports ================= */
+  function setRange(r) {
+    var now = new Date(), from = '', to = '';
+    if (r === 'month') { from = iso(new Date(now.getFullYear(), now.getMonth(), 1)); to = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)); }
+    if (r === 'last') { from = iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)); to = iso(new Date(now.getFullYear(), now.getMonth(), 0)); }
+    if (r === '3m') { from = iso(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate() + 1)); to = iso(now); }
+    if (r === 'year') { from = now.getFullYear() + '-01-01'; to = now.getFullYear() + '-12-31'; }
+    $('fromDate').value = from; $('toDate').value = to;
+    state.range = r; renderReportsChrome();
+  }
+  document.querySelectorAll('#rangeChips button').forEach(function (b) {
+    b.onclick = function () { setRange(b.getAttribute('data-range')); runReport(); };
   });
+  $('fromDate').onchange = $('toDate').onchange = function () { state.range = ''; renderReportsChrome(); };
   $('previewBtn').onclick = runReport;
+  $('incRemoved').onchange = function () { if (state.report) runReport(); };
+  $('tableBtn').onclick = function () {
+    var showTable = $('reportTableWrap').classList.contains('hidden');
+    $('reportTableWrap').classList.toggle('hidden', !showTable);
+    $('reportList').classList.toggle('hidden', showTable);
+    $('tableBtn').textContent = showTable ? 'Summary' : 'Full table';
+  };
+  function renderReportsChrome() {
+    document.querySelectorAll('#rangeChips button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-range') === state.range); });
+  }
   function runReport() {
     var from = $('fromDate').value, to = $('toDate').value;
-    if (from && to && from > to) { toast('“From” date is after “To” date', true); return; }
+    if (from && to && from > to) { toast('“From” is after “To”', true); return; }
+    var b = $('previewBtn'); b.disabled = true; b.textContent = 'Loading…';
     call('getAttendanceReport', from, to, $('incRemoved').checked, state.token).then(function (rep) {
+      b.disabled = false; b.textContent = 'Show report';
       state.report = { rows: rep.rows, from: from, to: to };
-      $('reportInfo').textContent = rep.eventCount + ' event(s), ' + rep.memberCount + ' member(s)' +
-        (from || to ? ' · ' + (from ? fmtDate(from) : 'start') + ' to ' + (to ? fmtDate(to) : 'today') : ' · all time');
-      $('csvBtn').disabled = !rep.eventCount;
-      $('reportWrap').classList.toggle('hidden', !rep.eventCount);
-      if (!rep.eventCount) { $('reportTable').innerHTML = ''; return; }
-      var rows = rep.rows;
-      $('reportTable').innerHTML = '<thead><tr>' + rows[0].map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-        rows.slice(1).map(function (r) {
-          return '<tr>' + r.map(function (c) { return '<td class="' + (c === 'P' || c === 'A' ? c : '') + '">' + esc(c) + '</td>'; }).join('') + '</tr>';
-        }).join('') + '</tbody>';
-    });
+      showReport(rep);
+    }, function () { b.disabled = false; b.textContent = 'Show report'; });
   }
-  $('csvBtn').onclick = function () {
+  function showReport(rep) {
+    var rows = rep.rows, header = rows[0], body = rows.slice(1, -1);
+    var iPresent = header.indexOf('Present'), iPct = header.indexOf('Attendance %');
+    var nameCol = 0;
+    $('reportOut').classList.remove('hidden');
+    var totalPresent = body.reduce(function (s, r) { return s + (+r[iPresent] || 0); }, 0);
+    var avg = rep.eventCount && body.length ? Math.round(totalPresent / (rep.eventCount * body.length) * 100) : 0;
+    $('reportStats').innerHTML =
+      '<div class="stat"><div class="v">' + rep.eventCount + '</div><div class="l">Events</div></div>' +
+      '<div class="stat"><div class="v">' + rep.memberCount + '</div><div class="l">Members</div></div>' +
+      '<div class="stat accent"><div class="v">' + (rep.eventCount ? avg + '%' : '–') + '</div><div class="l">Avg. attendance</div></div>';
+    if (!rep.eventCount) {
+      $('reportList').innerHTML = '<div>' + emptyBox('calendar', 'No events in this range', 'Pick a different date range.') + '</div>';
+      $('reportTable').innerHTML = '';
+      renderActionbarReport(false);
+      return;
+    }
+    var sorted = body.slice().sort(function (a, b) { return (+b[iPresent] || 0) - (+a[iPresent] || 0) || String(a[nameCol]).localeCompare(String(b[nameCol])); });
+    $('reportList').innerHTML = sorted.map(function (r) {
+      var pct = parseInt(r[iPct], 10) || 0;
+      var cls = pct >= 75 ? 'good' : pct >= 40 ? 'mid' : 'low';
+      return '<div class="item">' + avatar(String(r[nameCol]).replace(' (removed)', '')) + '<div class="item-body"><div class="item-name">' + esc(r[nameCol]) + '</div>' +
+        '<div class="item-sub">' + r[iPresent] + ' of ' + rep.eventCount + ' events</div>' +
+        '<div class="bar mini-bar"><span style="width:' + pct + '%"></span></div></div>' +
+        '<span class="pct ' + cls + '">' + esc(r[iPct]) + '</span></div>';
+    }).join('');
+    $('reportTable').innerHTML = '<thead><tr>' + header.map(function (h, i) {
+      var label = h;
+      var m = /^(\d{4}-\d{2}-\d{2}) (.*)$/.exec(h);
+      if (m) { var d = parseDate(m[1]); label = d.getDate() + ' ' + MONTHS[d.getMonth()] + '<br><small style="font-weight:500;color:var(--muted)">' + esc(m[2].slice(0, 14)) + '</small>'; }
+      else label = esc(h);
+      return '<th>' + label + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rows.slice(1).map(function (r) {
+      return '<tr>' + r.map(function (c) { return '<td class="' + (c === 'P' || c === 'A' ? c : '') + '">' + esc(c) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    renderActionbarReport(true);
+  }
+  function renderActionbarReport(canDownload) {
+    // Floating download button on the reports view
+    var fab = $('fab');
+    if (state.view !== 'reports') return;
+    fab.classList.toggle('hidden', !canDownload);
+    fab.innerHTML = icon('download', 22) + '<span>Download CSV</span>';
+    fab.onclick = downloadCsv;
+  }
+  function downloadCsv() {
     var r = state.report; if (!r) return;
     var csv = r.rows.map(function (row) {
       return row.map(function (c) { c = String(c == null ? '' : c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',');
@@ -360,18 +617,32 @@
     var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'attendance_' + (r.from || 'start') + '_to_' + (r.to || 'today') + '.csv';
+    a.download = 'SSYG_attendance_' + (r.from || 'start') + '_to_' + (r.to || iso(new Date())) + '.csv';
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+    toast('Report downloaded');
+  }
+  // Keep the download FAB when returning to Reports
+  var _renderFab = renderFab;
+  renderFab = function () {
+    _renderFab();
+    if (state.view === 'reports') renderActionbarReport(!!(state.report && state.report.rows.length > 2));
   };
 
-  /* ---------- start ---------- */
+  /* ================= start ================= */
   // Errors are already shown as a toast by call(); don't log them twice.
   window.addEventListener('unhandledrejection', function (e) { e.preventDefault(); });
-  applyRoleVisibility();
+  document.querySelectorAll('[data-icon]').forEach(function (el) { el.innerHTML = icon(el.getAttribute('data-icon'), 22); });
+  document.querySelectorAll('.search-ico').forEach(function (el) { el.innerHTML = icon('search', 20); });
+
   var saved = store('ssyg_token');
-  if (saved) {
-    call('checkSession', saved).then(function (ok) { if (ok) { setAdmin(saved); load(); } else store('ssyg_token', null); });
-  }
-  load().then(function () { started = true; }, function () { started = true; });
+  if (saved) state.token = saved; // try the saved admin session; server tells us if it's still valid
+  setAdmin(null);
+  if (saved) state.token = saved;
+  load().then(function () {
+    if (!saved) return;
+    return call('checkSession', saved).then(function (ok) {
+      if (ok) { setAdmin(saved); } else { state.token = null; store('ssyg_token', null); }
+    });
+  }).catch(function () {});
 })();
