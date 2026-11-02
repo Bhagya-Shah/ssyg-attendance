@@ -19,7 +19,7 @@ const fs = require('fs');
   await p.click('#authBtn'); await wait(); await p.fill('#pw', 'nope'); await p.click('#loginBtn'); await wait();
   check('wrong password rejected', (await toast()) === 'Wrong password.');
   await p.fill('#pw', 'secret123'); await p.click('#loginBtn'); await wait(400);
-  check('admin mode', (await p.textContent('#appSub')).includes('Admin'));
+  check('admin mode', (await p.textContent('#appSub')).includes('can edit'));
   // members
   await p.click('#tabbar button[data-tab=members]'); await p.click('#bulkBtn'); await wait();
   await p.fill('#bText', ['Ravi Patel, 09876543210','Asha Shah','Kiran Mehta','asha shah','Priya Desai','Neel Trivedi','Meera Joshi','Arjun Bhatt','Kavya Modi'].join('\n'));

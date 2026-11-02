@@ -162,8 +162,10 @@
     store('ssyg_token', token || null);
     var sub = $('appSub');
     sub.className = 'appbar-sub' + (state.isAdmin ? ' admin' : '');
-    sub.innerHTML = '<span class="dot"></span>' + (state.isAdmin ? 'Admin · can edit' : 'Viewing');
-    $('authBtn').innerHTML = state.isAdmin ? icon('logout', 17) + '<span>Log out</span>' : icon('lock', 17) + '<span>Admin</span>';
+    sub.innerHTML = '<span class="dot"></span>' + (state.isAdmin ? 'Logged in · can edit' : 'Viewing');
+    $('authBtn').setAttribute('aria-label', state.isAdmin ? 'Log out' : 'Login to edit');
+    $('authBtn').title = state.isAdmin ? 'Log out' : 'Login to edit';
+    $('authBtn').innerHTML = state.isAdmin ? icon('logout', 17) + '<span>Log out</span>' : icon('lock', 17) + '<span>Login</span>';
     document.querySelectorAll('.admin-only').forEach(function (el) { el.classList.toggle('hidden', !state.isAdmin); });
     render();
   }
@@ -174,7 +176,7 @@
       });
       return;
     }
-    sheet('<h2>Admin login</h2><p class="sub">Admins can add members and events and mark attendance.</p>' +
+    sheet('<h2>Login to edit</h2><p class="sub">Log in to add members and events and mark attendance. Viewing doesn’t need a login.</p>' +
       '<form id="loginForm"><label class="field"><span>Password</span><input type="password" id="pw" autocomplete="current-password" required></label>' +
       '<div class="sheet-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="loginBtn">Log in</button></div></form>',
       function () {
