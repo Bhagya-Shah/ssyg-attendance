@@ -19,6 +19,8 @@
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/>',
     undo: '<path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>',
     selectAll: '<path d="M4 12.5l4 4L18 6.5M10 18.5l1 1L21 9.5"/>',
+    file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5zM14 3v5h5M9 13h6M9 17h6"/>',
+    table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>',
     clear: '<circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6"/>'
   };
   function icon(name, size) {
@@ -69,7 +71,7 @@
     return '';
   }
 
-  var AV_COLORS = ['#ea580c', '#0891b2', '#7c3aed', '#16a34a', '#db2777', '#ca8a04', '#2563eb', '#dc2626', '#0d9488', '#9333ea'];
+  var AV_COLORS = ['#1e2a78', '#0891b2', '#7c3aed', '#16a34a', '#db2777', '#ca8a04', '#2563eb', '#dc2626', '#0d9488', '#9333ea'];
   function avatar(name) {
     var parts = String(name).trim().split(/\s+/);
     var ini = ((parts[0] || '')[0] || '?') + (parts.length > 1 ? parts[parts.length - 1][0] : '');
@@ -606,8 +608,16 @@
     var fab = $('fab');
     if (state.view !== 'reports') return;
     fab.classList.toggle('hidden', !canDownload);
-    fab.innerHTML = icon('download', 22) + '<span>Download CSV</span>';
-    fab.onclick = downloadCsv;
+    fab.innerHTML = icon('download', 22) + '<span>Download</span>';
+    fab.onclick = function () {
+      sheet('<h2>Download report</h2><p class="sub">' + esc(rangeLabel(state.report)) + '</p>' +
+        '<button class="menu-item" id="dPdf">' + icon('file') + '<span style="flex:1">PDF report<div class="item-sub" style="font-weight:500">Top 5, every member\'s total and %, events list</div></span></button>' +
+        '<button class="menu-item" id="dCsv">' + icon('table') + '<span style="flex:1">Excel / CSV<div class="item-sub" style="font-weight:500">Full P/A grid for every event</div></span></button>',
+        function () {
+          $('dPdf').onclick = function () { closeSheet(); downloadPdf(); };
+          $('dCsv').onclick = function () { closeSheet(); downloadCsv(); };
+        });
+    };
   }
   function downloadCsv() {
     var r = state.report; if (!r) return;
@@ -622,6 +632,172 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
     toast('Report downloaded');
   }
+
+  /* ================= PDF report ================= */
+  function rangeLabel(r) {
+    if (!r) return '';
+    if (!r.from && !r.to) return 'All time';
+    return (r.from ? fmtDate(r.from) : 'Start') + '  to  ' + (r.to ? fmtDate(r.to) : 'Today');
+  }
+  var pdfLibs;
+  function loadScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = src; s.onload = res;
+      s.onerror = function () { rej(new Error('Could not load ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  function loadPdfLibs() {
+    if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+    if (!pdfLibs) {
+      pdfLibs = loadScript('vendor/jspdf.umd.min.js').then(function () { return loadScript('vendor/jspdf.plugin.autotable.min.js'); });
+      pdfLibs.catch(function () { pdfLibs = null; });
+    }
+    return pdfLibs;
+  }
+  function logoDataUrl() {
+    var img = $('logo');
+    if (!img) return Promise.resolve(null);
+    if (img.src.indexOf('data:') === 0) return Promise.resolve(img.src);
+    return fetch(img.src).then(function (r) { return r.blob(); }).then(function (b) {
+      return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = function () { res(null); }; fr.readAsDataURL(b); });
+    }).catch(function () { return null; });
+  }
+  /** Turns the report grid into ranked members + per-event totals. */
+  function reportSummary(rows) {
+    var header = rows[0], body = rows.slice(1, -1), totals = rows[rows.length - 1];
+    var iPresent = header.indexOf('Present'), firstEv = header.indexOf('Phone') === 1 ? 2 : 1;
+    var events = header.slice(firstEv, iPresent).map(function (h, i) {
+      var m = /^(\d{4}-\d{2}-\d{2}) (.*)$/.exec(h) || [h, '', h];
+      return { date: m[1], name: m[2], present: +totals[firstEv + i] || 0 };
+    });
+    var n = events.length;
+    var members = body.map(function (r) {
+      var p = +r[iPresent] || 0;
+      return { name: String(r[0]), present: p, pct: n ? Math.round(p / n * 100) : 0 };
+    }).sort(function (a, b) { return b.present - a.present || a.name.localeCompare(b.name); });
+    // Standard competition ranking: ties share a rank (1, 2, 2, 4)
+    members.forEach(function (m, i) { m.rank = i && m.present === members[i - 1].present ? members[i - 1].rank : i + 1; });
+    var avg = n && members.length ? Math.round(members.reduce(function (s, m) { return s + m.present; }, 0) / (n * members.length) * 100) : 0;
+    return { events: events, members: members, avg: avg };
+  }
+  function downloadPdf() {
+    var r = state.report; if (!r) return;
+    toast('Preparing PDF…');
+    Promise.all([loadPdfLibs(), logoDataUrl()]).then(function (res) {
+      var logo = res[1];
+      var sum = reportSummary(r.rows);
+      var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+      var W = doc.internal.pageSize.getWidth(), M = 40;
+      var NAVY = [28, 26, 102], BLUE = [37, 65, 178], SOFT = [234, 240, 255], MUTED = [102, 112, 145], GREEN = [22, 130, 74], AMBER = [190, 120, 10], RED = [200, 40, 40];
+      var pctColor = function (p) { return p >= 75 ? GREEN : p >= 40 ? AMBER : RED; };
+
+      // Header band
+      doc.setFillColor.apply(doc, NAVY); doc.rect(0, 0, W, 96, 'F');
+      var stripe = [[225, 29, 29], [245, 184, 0], [255, 255, 255], [31, 157, 58], [59, 110, 245]];
+      stripe.forEach(function (c, i) { doc.setFillColor.apply(doc, c); doc.rect(i * W / 5, 96, W / 5 + 1, 4, 'F'); });
+      var tx = M;
+      if (logo) {
+        doc.setFillColor(255, 255, 255); doc.circle(M + 30, 48, 31, 'F');
+        try { doc.addImage(logo, 'PNG', M + 2, 20, 56, 56); tx = M + 76; } catch (e) {}
+      }
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('SSYG Attendance Report', tx, 44);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+      doc.text(rangeLabel(r), tx, 63);
+      doc.setFontSize(9); doc.text('Generated ' + fmtDate(iso(new Date())), tx, 79);
+
+      // Summary boxes
+      var y = 124, bw = (W - 2 * M - 20) / 3;
+      [['Events', String(sum.events.length)], ['Members', String(sum.members.length)], ['Average attendance', sum.avg + '%']].forEach(function (b, i) {
+        var x = M + i * (bw + 10);
+        doc.setFillColor.apply(doc, SOFT); doc.roundedRect(x, y, bw, 54, 8, 8, 'F');
+        doc.setTextColor.apply(doc, NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text(b[1], x + 14, y + 28);
+        doc.setTextColor.apply(doc, MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(b[0], x + 14, y + 44);
+      });
+      y += 82;
+
+      // Top 5
+      var top = sum.members.filter(function (m) { return m.rank <= 5 && m.present > 0; });
+      doc.setTextColor.apply(doc, NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+      doc.text('Top 5 attendees', M, y); y += 8;
+      var MEDAL = { 1: [245, 184, 0], 2: [160, 170, 190], 3: [205, 127, 50] };
+      if (top.length) {
+        doc.autoTable({
+          startY: y, margin: { left: M, right: M },
+          head: [['Rank', 'Member', 'Attended', 'Attendance %']],
+          body: top.map(function (m) { return ['#' + m.rank, m.name, m.present + ' of ' + sum.events.length, m.pct + '%']; }),
+          theme: 'plain',
+          headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold', fontSize: 10 },
+          bodyStyles: { fontSize: 11, cellPadding: 7, textColor: [20, 26, 51] },
+          alternateRowStyles: { fillColor: [247, 248, 252] },
+          columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold', halign: 'center' }, 1: { fontStyle: 'bold' }, 2: { cellWidth: 90, halign: 'center' }, 3: { cellWidth: 100, halign: 'center', fontStyle: 'bold' } },
+          didParseCell: function (d) {
+            if (d.section !== 'body') return;
+            var m = top[d.row.index];
+            if (d.column.index === 0 && MEDAL[m.rank]) { d.cell.styles.fillColor = MEDAL[m.rank]; d.cell.styles.textColor = 255; }
+            if (d.column.index === 3) d.cell.styles.textColor = pctColor(m.pct);
+          }
+        });
+        y = doc.lastAutoTable.finalY + 14;
+        if (top.length > 5) {
+          doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, MUTED);
+          doc.text('Members with the same attendance share a rank, so more than 5 can appear here.', M, y); 
+        }
+        y += 18;
+      } else {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor.apply(doc, MUTED);
+        doc.text('No attendance recorded in this period.', M, y + 14); y += 40;
+      }
+
+      // All members
+      doc.setTextColor.apply(doc, NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+      doc.text('All members', M, y); y += 8;
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M, top: 50 },
+        head: [['#', 'Member', 'Attended', 'Total events', 'Attendance %']],
+        body: sum.members.map(function (m) { return [m.rank, m.name, m.present, sum.events.length, m.pct + '%']; }),
+        theme: 'striped',
+        headStyles: { fillColor: NAVY, textColor: 255, fontSize: 10 },
+        bodyStyles: { fontSize: 10, cellPadding: 5, textColor: [20, 26, 51] },
+        alternateRowStyles: { fillColor: [247, 248, 252] },
+        columnStyles: { 0: { cellWidth: 36, halign: 'center', textColor: MUTED }, 2: { cellWidth: 70, halign: 'center' }, 3: { cellWidth: 80, halign: 'center' }, 4: { cellWidth: 92, halign: 'center', fontStyle: 'bold' } },
+        didParseCell: function (d) {
+          if (d.section === 'body' && d.column.index === 4) d.cell.styles.textColor = pctColor(sum.members[d.row.index].pct);
+        }
+      });
+      y = doc.lastAutoTable.finalY + 26;
+
+      // Events in the period
+      if (sum.events.length) {
+        if (y > doc.internal.pageSize.getHeight() - 120) { doc.addPage(); y = 50; }
+        doc.setTextColor.apply(doc, NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+        doc.text('Events in this period', M, y); y += 8;
+        doc.autoTable({
+          startY: y, margin: { left: M, right: M, top: 50 },
+          head: [['Date', 'Event', 'Present']],
+          body: sum.events.map(function (e) { return [fmtDate(e.date), e.name, e.present]; }),
+          theme: 'striped',
+          headStyles: { fillColor: BLUE, textColor: 255, fontSize: 10 },
+          bodyStyles: { fontSize: 10, cellPadding: 5, textColor: [20, 26, 51] },
+          alternateRowStyles: { fillColor: [247, 248, 252] },
+          columnStyles: { 0: { cellWidth: 120 }, 2: { cellWidth: 70, halign: 'center', fontStyle: 'bold' } }
+        });
+      }
+
+      // Footer on every page
+      var pages = doc.internal.getNumberOfPages(), H = doc.internal.pageSize.getHeight();
+      for (var i = 1; i <= pages; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, MUTED);
+        doc.text('SSYG Attendance', M, H - 20);
+        doc.text('Page ' + i + ' of ' + pages, W - M, H - 20, { align: 'right' });
+      }
+      doc.save('SSYG_attendance_' + (r.from || 'start') + '_to_' + (r.to || iso(new Date())) + '.pdf');
+      toast('PDF downloaded');
+    }).catch(function (e) { toast('Could not create PDF: ' + ((e && e.message) || e), true); });
+  }
+
   // Keep the download FAB when returning to Reports
   var _renderFab = renderFab;
   renderFab = function () {

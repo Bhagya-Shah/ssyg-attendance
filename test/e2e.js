@@ -59,10 +59,14 @@ const fs = require('fs');
   await p.click('#tabbar button[data-tab=reports]'); await p.click('#rangeChips button[data-range=all]'); await wait(400);
   check('report 2 events', (await p.textContent('#reportStats')).includes('2Events'));
   await shot('08-report');
-  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#fab')]);
+  await p.click('#fab'); await wait(); await shot('08b-download-sheet');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#dCsv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   check('csv has header + removed member', csv.includes('2026-10-15 Diwali Sabha') && csv.includes('Kiran Mehta (removed)'));
-  console.log(csv);
+  await wait(); await p.click('#fab'); await wait();
+  const [pdf] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('#dPdf')]);
+  fs.copyFileSync(await pdf.path(), 'test/shots/report.pdf');
+  check('pdf downloaded', pdf.suggestedFilename().endsWith('.pdf') && fs.readFileSync('test/shots/report.pdf').slice(0, 4).toString() === '%PDF');
   await p.click('#tableBtn'); await wait(); await shot('09-table');
   // viewer
   await p.click('#authBtn'); await wait(); await p.click('#cOk'); await wait(400);

@@ -8,6 +8,10 @@ mock = open('test/mock-gas.js').read() + open('apps-script/Code.gs').read()
 html = html.replace('<link rel="stylesheet" href="styles.css">', '<style>' + open('web/styles.css').read() + '</style>')
 html = html.replace('<script src="config.js"></script>', '<script>' + mock + '\nwindow.APP_CONFIG={API_URL:"mock://api"};</script>')
 html = html.replace('<script src="app.js"></script>', '<script>' + open('web/app.js').read() + '</script>')
+import base64
+logo = 'data:image/png;base64,' + base64.b64encode(open('web/logo.png', 'rb').read()).decode()
+html = html.replace('src="logo.png"', 'src="' + logo + '"')
+html = html.replace("'vendor/", "'../web/vendor/")
 open('test/preview.html', 'w').write(html)
 PY
 echo built test/preview.html

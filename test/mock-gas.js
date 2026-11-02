@@ -42,7 +42,9 @@
   g.LockService = { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } };
   g.ContentService = { MimeType: { JSON: 'json' }, createTextOutput: function (t) { return { text: t, setMimeType: function () { return this; } }; } };
   // fetch shim: routes the website's API calls into doPost() of Code.gs
+  var realFetch = g.fetch && g.fetch.bind(g);
   g.fetch = function (url, opts) {
+    if (url !== 'mock://api') return realFetch(url, opts);
     return new Promise(function (resolve) {
       setTimeout(function () {
         var out = g.doPost({ postData: { contents: opts.body } });
