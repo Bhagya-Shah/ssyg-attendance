@@ -74,6 +74,11 @@ Google Sheet: Members | Events | Attendance tabs
 9. **Use it.** Open the link, click **Admin login**, enter your password, go to **Members > Add many** and paste your member list (one per line, optionally `Name, Phone`).
 10. **Share** the link with everyone. They can view without a password; only people who know the admin password can make changes.
 
+## Importing the old attendance (one time)
+
+`apps-script/ImportOldData.gs` holds the history from the old app (4 Jul to 1 Nov 2026: 42 members, 45 meetings, 283 marks).
+In Apps Script: **+ > Script**, name it `ImportOldData`, paste the file, save, pick `importOldData` in the dropdown and click **Run**. Running it twice does not create duplicates. You can delete the file afterwards.
+
 ## Updating the app later
 
 - **Website changes** (`web/`): commit and push to GitHub. Vercel redeploys automatically in under a minute.
