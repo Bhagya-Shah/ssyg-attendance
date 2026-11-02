@@ -19,6 +19,7 @@
       setFontWeight: function () { return this; }, setNumberFormat: function () { return this; }
     };
   };
+  Sheet.prototype.getLastColumn = function () { var m = 0; this.data.forEach(function (r) { for (var i = r.length; i > m; i--) if (r[i - 1] !== '' && r[i - 1] != null) { m = i; break; } }); return m; };
   Sheet.prototype.appendRow = function (row) { var r = this.getLastRow() + 1; this.getRange(r, 1, 1, row.length).setValues([row]); };
   Sheet.prototype.deleteRow = function (r) { this.data.splice(r - 1, 1); };
   Sheet.prototype.setFrozenRows = function () {};

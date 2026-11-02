@@ -3,7 +3,7 @@
  *
  * The Google Sheet this script is bound to is the database:
  *   Members    : ID | Name | Phone | Email | Notes | Active | Added On
- *   Events     : ID | Date | Name | Description | Created On
+ *   Events     : ID | Date | Name | Description | Created On | Category
  *   Attendance : Event ID | Member ID | Marked At
  *     (one row per member who was PRESENT at an event)
  *
@@ -18,7 +18,7 @@
 
 var SHEETS = {
   members: { name: 'Members', headers: ['ID', 'Name', 'Phone', 'Email', 'Notes', 'Active', 'Added On'] },
-  events: { name: 'Events', headers: ['ID', 'Date', 'Name', 'Description', 'Created On'] },
+  events: { name: 'Events', headers: ['ID', 'Date', 'Name', 'Description', 'Created On', 'Category'] },
   attendance: { name: 'Attendance', headers: ['Event ID', 'Member ID', 'Marked At'] }
 };
 
@@ -103,6 +103,11 @@ function setup_() {
     if (sh.getLastRow() === 0) {
       sh.getRange(1, 1, 1, def.headers.length).setValues([def.headers]).setFontWeight('bold');
       sh.setFrozenRows(1);
+    } else if (sh.getLastColumn() < def.headers.length) {
+      // Newer version added columns (e.g. Category): add their headers, keep all data.
+      var from = sh.getLastColumn() + 1;
+      sh.getRange(1, from, 1, def.headers.length - from + 1)
+        .setValues([def.headers.slice(from - 1)]).setFontWeight('bold');
     }
   });
   // Keep the event date column as plain text (yyyy-MM-dd) so time zones never shift it.
@@ -177,10 +182,10 @@ function getEventAttendance(eventId) {
  * (inclusive, yyyy-MM-dd; either may be empty for no limit).
  * Returns a 2-D array ready to be turned into CSV.
  */
-function getAttendanceReport(from, to, includeInactive, token) {
+function getAttendanceReport(from, to, includeInactive, token, category) {
   var isAdmin = checkSession(token);
   var events = readEvents_().filter(function (e) {
-    return (!from || e.date >= from) && (!to || e.date <= to);
+    return (!from || e.date >= from) && (!to || e.date <= to) && (!category || e.category === category);
   }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
   var eventIds = {};
@@ -320,7 +325,7 @@ function saveEvent(token, ev) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Event date is required.');
   return withLock_(function () {
     var sh = sheet_('events');
-    var row = [ev.id || newId_('E'), date, name, clean_(ev.description), ''];
+    var row = [ev.id || newId_('E'), date, name, clean_(ev.description), '', clean_(ev.category)];
     var idx = ev.id ? findRow_(sh, ev.id) : -1;
     if (idx > 0) {
       row[4] = sh.getRange(idx, 5).getValue();
@@ -397,7 +402,8 @@ function readEvents_() {
       id: String(r[0]),
       date: asDate_(r[1]),
       name: String(r[2]),
-      description: String(r[3])
+      description: String(r[3]),
+      category: String(r[5] || '').trim()
     };
   });
 }

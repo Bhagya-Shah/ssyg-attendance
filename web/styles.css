@@ -358,3 +358,12 @@ td.P { color: var(--ok); font-weight: 800; } td.A { color: var(--muted); opacity
   background: linear-gradient(90deg, #e11d1d 0 20%, #f5b800 20% 40%, #e8ecf6 40% 60%, #1f9d3a 60% 80%, #3b6ef5 80% 100%);
 }
 @media (prefers-color-scheme: dark) { .stat.accent .v { color: var(--brand-ink); } }
+
+/* ---------- categories ---------- */
+.cat-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--brand-ink); background: var(--brand-soft); padding: 2px 8px; border-radius: 999px; margin-bottom: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-tag.big { font-size: 13px; padding: 5px 10px; margin: 0; }
+.hero-tags { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.cat-filter { margin: 0 -16px 4px; }
+.cat-pick { margin: -4px -18px 14px; padding: 0 18px; }
+.cat-pick button { height: 32px; font-size: 13px; }
+.field-label { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px 2px; }

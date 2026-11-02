@@ -34,7 +34,7 @@
     members: [], events: [],
     view: 'events', currentEvent: null,
     present: {}, saved: {}, attFilter: 'all',
-    showRemoved: false, report: null, range: 'all'
+    showRemoved: false, report: null, range: 'all', catFilter: ''
   };
 
   /* ================= helpers ================= */
@@ -82,6 +82,22 @@
   function activeMembers() { return state.members.filter(function (m) { return m.active; }).sort(byName); }
   function findMember(id) { return state.members.filter(function (m) { return m.id === id; })[0]; }
   function findEvent(id) { return state.events.filter(function (e) { return e.id === id; })[0]; }
+  function categories() {
+    var seen = {}, out = [];
+    state.events.forEach(function (e) { var c = e.category; if (c && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = 1; out.push(c); } });
+    return out.sort(function (a, b) { return a.localeCompare(b); });
+  }
+  function catChips(boxId, current, onPick) {
+    var cats = categories(), box = $(boxId);
+    if (!cats.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    if (current && cats.indexOf(current) < 0) current = '';
+    box.classList.remove('hidden');
+    box.innerHTML = '<button data-c=""' + (current ? '' : ' class="on"') + '>All</button>' + cats.map(function (c) {
+      return '<button data-c="' + esc(c) + '"' + (c === current ? ' class="on"' : '') + '>' + esc(c) + '</button>';
+    }).join('');
+    box.querySelectorAll('button').forEach(function (b) { b.onclick = function () { onPick(b.getAttribute('data-c')); }; });
+    return current;
+  }
   function emptyBox(ico, title, text) {
     return '<div class="empty"><div class="em-ico">' + icon(ico, 26) + '</div><b>' + esc(title) + '</b>' + esc(text || '') + '</div>';
   }
@@ -257,11 +273,14 @@
       '<div class="stat accent"><div class="v">' + (avg == null ? '–' : avg + '%') + '</div><div class="l">Avg. attendance</div></div>';
 
     if (!state.loaded) { $('eventList').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
+    state.catFilter = catChips('eventCats', state.catFilter, function (c) { state.catFilter = c; renderEvents(); }) || '';
     var q = $('eventSearch').value.trim().toLowerCase();
     var list = evs.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; })
-      .filter(function (e) { return !q || (e.name + ' ' + e.description + ' ' + fmtDate(e.date)).toLowerCase().indexOf(q) >= 0; });
+      .filter(function (e) { return !state.catFilter || e.category === state.catFilter; })
+      .filter(function (e) { return !q || (e.name + ' ' + e.description + ' ' + (e.category || '') + ' ' + fmtDate(e.date)).toLowerCase().indexOf(q) >= 0; });
     if (!list.length) {
       $('eventList').innerHTML = evs.length ? emptyBox('search', 'No matches', 'Try a different search.')
+        : state.catFilter ? emptyBox('search', 'No events', 'No events in this category.')
         : emptyBox('calendar', 'No events yet', state.isAdmin ? 'Tap “New event” to create the first one.' : 'Events will show up here.');
       return;
     }
@@ -273,7 +292,7 @@
       var rel = relDay(e.date);
       html += '<button class="ev-card" data-id="' + esc(e.id) + '">' +
         '<div class="dtile"><div class="d">' + (isNaN(d) ? '?' : d.getDate()) + '</div><div class="w">' + (isNaN(d) ? '' : DAYS[d.getDay()]) + '</div></div>' +
-        '<div class="ev-body"><div class="ev-name">' + esc(e.name) + '</div>' +
+        '<div class="ev-body">' + (e.category ? '<span class="cat-tag">' + esc(e.category) + '</span>' : '') + '<div class="ev-name">' + esc(e.name) + '</div>' +
         '<div class="ev-desc">' + esc(rel ? rel + (e.description ? ' · ' + e.description : '') : (e.description || fmtDate(e.date))) + '</div>' +
         '<div class="ev-meta"><div class="bar"><span style="width:' + pct + '%"></span></div><span>' + e.presentCount + ' present</span></div></div>' +
         '<span class="chev">' + icon('chev', 18) + '</span></button>';
@@ -286,20 +305,32 @@
 
   function eventForm(ev) {
     var isNew = !ev;
-    ev = ev || { date: iso(new Date()), name: '', description: '' };
+    ev = ev || { date: iso(new Date()), name: '', description: '', category: state.catFilter || '' };
+    var cats = categories();
     sheet('<h2>' + (isNew ? 'New event' : 'Edit event') + '</h2><p class="sub">' + (isNew ? 'After saving you can mark who was present.' : 'Update the event details.') + '</p>' +
       '<form id="evForm">' +
       '<label class="field"><span>Event name</span><input id="fName" required maxlength="120" value="' + esc(ev.name) + '" placeholder="e.g. Weekly sabha" autocomplete="off"></label>' +
       '<label class="field"><span>Date</span><input type="date" id="fDate" required value="' + esc(ev.date) + '"></label>' +
+      '<label class="field"><span>Category (optional)</span><input id="fCat" maxlength="60" list="catList" value="' + esc(ev.category || '') + '" placeholder="e.g. Sandhya Bhakti, Shibir, Seva" autocomplete="off">' +
+      '<datalist id="catList">' + cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></label>' +
+      (cats.length ? '<div class="chips cat-pick" id="catPick">' + cats.map(function (c) { return '<button type="button" data-c="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' : '') +
       '<label class="field"><span>Description (optional)</span><textarea id="fDesc" maxlength="1000" placeholder="Venue, topic, notes…">' + esc(ev.description) + '</textarea></label>' +
       '<div class="sheet-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="evSave">' + (isNew ? 'Create' : 'Save') + '</button></div>' +
       (isNew ? '' : '<button type="button" class="menu-item danger" id="evDel" style="justify-content:center;margin-top:10px">' + icon('trash', 20) + 'Delete event</button>') +
       '</form>',
       function () {
+        var markPick = function () {
+          var v = $('fCat').value.trim();
+          document.querySelectorAll('#catPick button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-c') === v); });
+        };
+        document.querySelectorAll('#catPick button').forEach(function (b) {
+          b.onclick = function () { var c = b.getAttribute('data-c'); $('fCat').value = $('fCat').value.trim() === c ? '' : c; markPick(); };
+        });
+        $('fCat').oninput = markPick; markPick();
         $('evForm').onsubmit = function (e) {
           e.preventDefault();
           var b = $('evSave'); busy(b, true);
-          var data = { id: ev.id, date: $('fDate').value, name: $('fName').value, description: $('fDesc').value };
+          var data = { id: ev.id, date: $('fDate').value, name: $('fName').value, description: $('fDesc').value, category: $('fCat').value };
           call('saveEvent', state.token, data).then(function (id) {
             closeSheet(); toast(isNew ? 'Event created' : 'Event updated');
             return load().then(function () { if (isNew) openEvent(id); });
@@ -357,6 +388,8 @@
     var total = activeMembers().length, n = presentCount();
     var rel = relDay(ev.date);
     $('evDate').textContent = (rel ? rel + ' · ' : '') + fmtDate(ev.date);
+    $('evCat').textContent = ev.category || '';
+    $('evCat').classList.toggle('hidden', !ev.category);
     $('evName').textContent = ev.name;
     $('evDesc').textContent = ev.description || '';
     $('evPresent').textContent = n;
@@ -554,15 +587,18 @@
     $('tableBtn').textContent = showTable ? 'Summary' : 'Full table';
   };
   function renderReportsChrome() {
+    state.repCat = catChips('repCats', state.repCat, function (c) { state.repCat = c; renderReportsChrome(); runReport(); }) || '';
+    $('repCatLabel').classList.toggle('hidden', !categories().length);
     document.querySelectorAll('#rangeChips button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-range') === state.range); });
   }
   function runReport() {
     var from = $('fromDate').value, to = $('toDate').value;
     if (from && to && from > to) { toast('“From” is after “To”', true); return; }
     var b = $('previewBtn'); b.disabled = true; b.textContent = 'Loading…';
-    call('getAttendanceReport', from, to, $('incRemoved').checked, state.token).then(function (rep) {
+    var cat = state.repCat || '';
+    call('getAttendanceReport', from, to, $('incRemoved').checked, state.token, cat).then(function (rep) {
       b.disabled = false; b.textContent = 'Show report';
-      state.report = { rows: rep.rows, from: from, to: to };
+      state.report = { rows: rep.rows, from: from, to: to, category: cat };
       showReport(rep);
     }, function () { b.disabled = false; b.textContent = 'Show report'; });
   }
@@ -627,7 +663,7 @@
     var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'SSYG_attendance_' + (r.from || 'start') + '_to_' + (r.to || iso(new Date())) + '.csv';
+    a.download = 'SSYG_attendance_' + (r.category ? r.category.replace(/[^\w]+/g, '-') + '_' : '') + (r.from || 'start') + '_to_' + (r.to || iso(new Date())) + '.csv';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
     toast('Report downloaded');
@@ -636,8 +672,8 @@
   /* ================= PDF report ================= */
   function rangeLabel(r) {
     if (!r) return '';
-    if (!r.from && !r.to) return 'All time';
-    return (r.from ? fmtDate(r.from) : 'Start') + '  to  ' + (r.to ? fmtDate(r.to) : 'Today');
+    var range = !r.from && !r.to ? 'All time' : (r.from ? fmtDate(r.from) : 'Start') + '  to  ' + (r.to ? fmtDate(r.to) : 'Today');
+    return range + (r.category ? '  ·  ' + r.category : '');
   }
   var pdfLibs;
   function loadScript(src) {
@@ -793,7 +829,7 @@
         doc.text('SSYG Attendance', M, H - 20);
         doc.text('Page ' + i + ' of ' + pages, W - M, H - 20, { align: 'right' });
       }
-      doc.save('SSYG_attendance_' + (r.from || 'start') + '_to_' + (r.to || iso(new Date())) + '.pdf');
+      doc.save('SSYG_attendance_' + (r.category ? r.category.replace(/[^\w]+/g, '-') + '_' : '') + (r.from || 'start') + '_to_' + (r.to || iso(new Date())) + '.pdf');
       toast('PDF downloaded');
     }).catch(function (e) { toast('Could not create PDF: ' + ((e && e.message) || e), true); });
   }

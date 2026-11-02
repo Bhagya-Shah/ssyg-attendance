@@ -31,7 +31,7 @@ const fs = require('fs');
   await shot('03-members');
   // events
   await p.click('#tabbar button[data-tab=events]'); await p.click('#fab'); await wait();
-  await p.fill('#fName', 'Diwali Sabha'); await p.fill('#fDate', '2026-10-15'); await p.fill('#fDesc', 'Evening program at the hall');
+  await p.fill('#fName', 'Diwali Sabha'); await p.fill('#fDate', '2026-10-15'); await p.fill('#fDesc', 'Evening program at the hall'); await p.fill('#fCat', 'Festival');
   await shot('04-new-event');
   await p.click('#evSave'); await wait(500);
   check('opens event after create', (await p.textContent('#evName')) === 'Diwali Sabha');
@@ -49,6 +49,18 @@ const fs = require('fs');
   await p.click('#saveAttBtn'); await wait(400);
   check('mark all then untick one', (await toast()) === 'Saved · 8 present');
   await p.click('#backBtn'); await wait(300);
+  check('category chips on events list', (await p.textContent('#eventCats')).includes('Festival'));
+  await p.click('#eventCats button[data-c="Festival"]'); await wait(100);
+  check('category filter shows 1 event', (await p.$$('.ev-card')).length === 1);
+  await p.click('#eventCats button[data-c=""]'); await wait(100);
+  // optional: event without category still saves; quick-pick chip fills the field
+  await p.click('#fab'); await wait(); await p.fill('#fName', 'Seva day'); await p.fill('#fDate', '2026-09-05');
+  await p.click('#catPick button[data-c="Festival"]');
+  check('quick-pick fills category', (await p.inputValue('#fCat')) === 'Festival');
+  await p.click('#catPick button[data-c="Festival"]');
+  check('tap again clears category', (await p.inputValue('#fCat')) === '');
+  await p.click('#evSave'); await wait(500); await p.click('#backBtn'); await wait(300);
+  check('3 events', (await p.$$('.ev-card')).length === 3);
   await shot('06-events');
   // remove member
   await p.click('#tabbar button[data-tab=members]'); await p.click('#memberList .item:has-text("Kiran")'); await wait();
@@ -57,7 +69,11 @@ const fs = require('fs');
   check('8 active after remove', (await p.textContent('#memberCount')) === '8 members');
   // reports
   await p.click('#tabbar button[data-tab=reports]'); await p.click('#rangeChips button[data-range=all]'); await wait(400);
-  check('report 2 events', (await p.textContent('#reportStats')).includes('2Events'));
+  check('report 3 events', (await p.textContent('#reportStats')).includes('3Events'));
+  await p.click('#repCats button[data-c="Festival"]'); await wait(400);
+  check('report category filter', (await p.textContent('#reportStats')).includes('1Events'));
+  await shot('08c-report-category');
+  await p.click('#repCats button[data-c=""]'); await wait(400);
   await shot('08-report');
   await p.click('#fab'); await wait(); await shot('08b-download-sheet');
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#dCsv')]);
