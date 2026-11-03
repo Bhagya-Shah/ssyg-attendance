@@ -763,7 +763,10 @@
     var iPresent = header.indexOf('Present'), firstEv = header.indexOf('Phone') === 1 ? 2 : 1;
     var events = header.slice(firstEv, iPresent).map(function (h, i) {
       var m = /^(\d{4}-\d{2}-\d{2}) (.*)$/.exec(h) || [h, '', h];
-      return { date: m[1], name: m[2], present: +totals[firstEv + i] || 0 };
+      var names = body.filter(function (r) { return r[firstEv + i] === 'P'; })
+        .map(function (r) { return String(r[0]).replace(/ \(removed\)$/, ''); })
+        .sort(function (a, b) { return a.localeCompare(b); });
+      return { date: m[1], name: m[2], present: +totals[firstEv + i] || 0, names: names };
     });
     var n = events.length;
     var members = body.map(function (r) {
@@ -930,13 +933,25 @@
         doc.text('Events in this period', M, y); y += 8;
         doc.autoTable({
           startY: y, margin: { left: M, right: M, top: 50 },
-          head: [['Date', 'Event', 'Present']],
-          body: sum.events.map(function (e) { return [fmtDate(e.date), e.name, e.present]; }),
-          theme: 'striped',
+          head: [['Date', 'Event', 'Present', 'Members present']],
+          body: sum.events.map(function (e) {
+            var d = parseDate(e.date);
+            return [DAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + '\n' + d.getFullYear(), e.name, e.present,
+              { content: e.names.length ? e.names.join(', ') : 'Nobody marked present', none: !e.names.length }];
+          }),
+          theme: 'striped', rowPageBreak: 'avoid',
           headStyles: { fillColor: BLUE, textColor: 255, fontSize: 10 },
-          bodyStyles: { fontSize: 10, cellPadding: 5, textColor: [20, 26, 51] },
+          bodyStyles: { fontSize: 9, cellPadding: 6, textColor: [20, 26, 51], valign: 'top' },
           alternateRowStyles: { fillColor: [247, 248, 252] },
-          columnStyles: { 0: { cellWidth: 120 }, 2: { cellWidth: 70, halign: 'center', fontStyle: 'bold' } }
+          columnStyles: {
+            0: { cellWidth: 74, textColor: MUTED },
+            1: { cellWidth: 128, fontStyle: 'bold' },
+            2: { cellWidth: 50, halign: 'center', fontStyle: 'bold', fontSize: 11, textColor: GREEN },
+            3: { fontSize: 8.5, textColor: [40, 46, 70] }
+          },
+          didParseCell: function (d) {
+            if (d.section === 'body' && d.cell.raw && d.cell.raw.none) { d.cell.styles.textColor = MUTED; d.cell.styles.fontStyle = 'italic'; }
+          }
         });
       }
 
